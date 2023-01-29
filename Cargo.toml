@@ -3,5 +3,11 @@ name = "local-talk"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "server"
+
+[[bin]]
+name = "client"
+
 [dependencies]
 daemonize = "0.4.1"
