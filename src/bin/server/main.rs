@@ -12,7 +12,7 @@ use std::{
 use daemonize::Daemonize;
 
 fn accept_requests() -> Result<(), Error> {
-    let listener = TcpListener::bind("127.0.0.1:10080")?;
+    let listener = TcpListener::bind("0.0.0.0:10080")?;
     let jh = thread::spawn(move || loop {
         match listener.accept() {
             Ok((socket, addr)) => {

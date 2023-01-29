@@ -1,14 +1,27 @@
-use std::{io::{Error, Write}, net::TcpStream};
+use std::{
+    io::{Error, Write},
+    net::{TcpStream, ToSocketAddrs},
+};
+
+const HOST: &str = "server";
+const PORT: i32 = 10080;
 
 fn main() -> Result<(), Error> {
-    let mut sock = TcpStream::connect("127.0.0.1:10080").expect("Failed to connect");
-    match sock.write_all("Hello, TCP\r\n".as_bytes()) {
-        Ok(()) => println!("send test message success"),
-        Err(v) => println!("send test message failed:{}",v),
-    }
-    match sock.write_all("World End\r\n".as_bytes()) {
-        Ok(()) => println!("send test message success"),
-        Err(v) => println!("send test message failed:{}",v),
+    let socket_addrs = format!("{HOST}:{PORT}")
+        .to_socket_addrs()
+        .expect("Failed to get socket addr from hostname");
+
+    for addr in socket_addrs {
+        let mut sock = TcpStream::connect(addr).expect("Failed to connect");
+        match sock.write_all("Hello, TCP\r\n".as_bytes()) {
+            Ok(()) => println!("send test message success"),
+            Err(v) => println!("send test message failed:{}", v),
+        }
+        match sock.write_all("World End\r\n".as_bytes()) {
+            Ok(()) => println!("send test message success"),
+            Err(v) => println!("send test message failed:{}", v),
+        }
+        break;
     }
 
     Ok(())

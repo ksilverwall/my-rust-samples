@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  server:
+    image: rust
+    networks:
+      - network-1
+    volumes:
+      - ./:/usr/src/myapp
+      - ./container/server/tmp/:/tmp/
+      - cargo-registry:/usr/local/cargo/registry
+    working_dir: /usr/src/myapp
+    command: "cargo run --bin server"
+  client:
+    image: rust
+    networks:
+      - network-1
+    volumes:
+      - ./:/usr/src/myapp
+      - cargo-registry:/usr/local/cargo/registry
+    depends_on:
+      - server
+    working_dir: /usr/src/myapp
+    command: "cargo run --bin client"
+
+volumes:
+  cargo-registry:
+
+networks:
+  network-1:
