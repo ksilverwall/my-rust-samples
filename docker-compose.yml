@@ -1,30 +1,49 @@
 version: "3.9"
 
 services:
+  #
+  # Services
+  #
   server:
     image: rust
     networks:
       - network-1
     volumes:
-      - ./:/usr/src/myapp
-      - ./container/server/tmp/:/tmp/
-      - cargo-registry:/usr/local/cargo/registry
+      - cargo-target:/app/target
     working_dir: /usr/src/myapp
-    command: "cargo run --bin server"
+    command: "/app/target/debug/server"
+
+  #
+  # Commands
+  #
+  build:
+    image: rust
+    volumes:
+      - ./:/usr/src/myapp
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-target:/app/target
+    working_dir: /usr/src/myapp
+    command: "cargo build"
+    environment:
+      - CARGO_BUILD_TARGET_DIR=/app/target
+    profiles:
+      - command
   client:
     image: rust
     networks:
       - network-1
     volumes:
-      - ./:/usr/src/myapp
-      - cargo-registry:/usr/local/cargo/registry
+      - cargo-target:/app/target
     depends_on:
       - server
     working_dir: /usr/src/myapp
-    command: "cargo run --bin client"
+    command: "/app/target/debug/client"
+    profiles:
+      - command
 
 volumes:
   cargo-registry:
+  cargo-target:
 
 networks:
   network-1:
