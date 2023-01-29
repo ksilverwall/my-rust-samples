@@ -1,6 +1,7 @@
 extern crate daemonize;
 
 use std::{
+    env,
     fs::File,
     io::{BufRead, BufReader, Error},
     net::TcpListener,
@@ -41,19 +42,25 @@ fn accept_requests() -> Result<(), Error> {
 }
 
 fn main() {
-    let stdout = File::create("/tmp/daemon.out").unwrap();
-    let stderr = File::create("/tmp/daemon.err").unwrap();
+    let args: Vec<String> = env::args().collect();
 
-    let daemonize = Daemonize::new()
-        .pid_file("/tmp/test.pid")
-        .working_directory("/tmp")
-        .stdout(stdout)
-        .stderr(stderr)
-        .privileged_action(|| "Executed before drop privileges");
+    let is_deamon = args.len() >= 2 && args[1] == "-d";
 
-    match daemonize.start() {
-        Ok(_) => println!("Success, daemonized"),
-        Err(e) => eprintln!("Error, {}", e),
+    if is_deamon {
+        let stdout = File::create("/tmp/daemon.out").unwrap();
+        let stderr = File::create("/tmp/daemon.err").unwrap();
+
+        let daemonize = Daemonize::new()
+            .pid_file("/tmp/test.pid")
+            .working_directory("/tmp")
+            .stdout(stdout)
+            .stderr(stderr)
+            .privileged_action(|| "Executed before drop privileges");
+
+        match daemonize.start() {
+            Ok(_) => println!("Success, daemonized"),
+            Err(e) => eprintln!("Error, {}", e),
+        }
     }
 
     match accept_requests() {
