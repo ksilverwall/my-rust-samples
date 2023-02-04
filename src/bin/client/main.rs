@@ -1,5 +1,5 @@
 use std::{
-    io::{Error, Write},
+    io::{BufRead, BufReader, Error, Write},
     net::{TcpStream, ToSocketAddrs},
 };
 
@@ -21,6 +21,15 @@ fn main() -> Result<(), Error> {
             Ok(()) => println!("send test message success"),
             Err(v) => println!("send test message failed:{}", v),
         }
+
+        let mut rcv_data = String::new();
+        let mut reader = BufReader::new(sock.try_clone().unwrap());
+        reader.read_line(&mut rcv_data).unwrap();
+        print!("{rcv_data}");
+
+        let mut rcv_data = String::new();
+        reader.read_line(&mut rcv_data).unwrap();
+        print!("{rcv_data}");
         break;
     }
 
