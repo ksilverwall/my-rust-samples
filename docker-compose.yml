@@ -4,10 +4,20 @@ services:
   #
   # Services
   #
+  database:
+    image: postgres
+    networks:
+      - server-local
+    volumes:
+      - db-store:/var/lib/postgresql/data
+      - ./container/database/scripts:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_PASSWORD=mysecretpassword
   server:
     image: rust
     networks:
       - network-1
+      - server-local
     volumes:
       - cargo-target:/app/target
     working_dir: /usr/src/myapp
@@ -44,6 +54,8 @@ services:
 volumes:
   cargo-registry:
   cargo-target:
+  db-store:
 
 networks:
   network-1:
+  server-local:
