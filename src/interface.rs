@@ -1,11 +1,8 @@
+use serde::{Serialize, Deserialize};
+
 pub enum AcceptMessageType {
     GetMessages,
     SendMessage,
-}
-
-pub enum SendMessageType {
-    RecordsLoaded,
-    Updated,
 }
 
 impl AcceptMessageType {
@@ -24,6 +21,11 @@ impl AcceptMessageType {
     }
 }
 
+pub enum SendMessageType {
+    RecordsLoaded,
+    Updated,
+}
+
 impl SendMessageType {
     pub fn from_str(s: &str) -> SendMessageType {
         match s {
@@ -38,4 +40,18 @@ impl SendMessageType {
             SendMessageType::Updated => "UPDATED".to_string(),
         }
     }
+}
+
+
+#[derive(Serialize)]
+pub struct GetMessageDto {
+    pub message_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PostMessageDto {
+    pub message_type: String,
+    pub user_id: String,
+    pub password: String,
+    pub message: String,
 }

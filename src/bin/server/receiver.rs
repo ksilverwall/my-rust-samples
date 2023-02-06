@@ -1,38 +1,44 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
-struct Received {
-    request_type: String,
-}
+use local_talk::interface::{AcceptMessageType, PostMessageDto};
 
 #[derive(Serialize, Deserialize)]
-struct ReceivedMessage {
-    message: String,
+pub struct PostData {
+    pub user_id: String,
+    pub password: String,
+    pub message: String,
 }
 
-pub enum ReceivedData {
-    PostMessage(String),
+pub enum AcceptedMessage {
+    PostMessage(PostData),
     GetMessages,
     None,
 }
 
-use local_talk::interface::AcceptMessageType;
-
-impl ReceivedData {
-    pub fn from_str(data: &String) -> ReceivedData {
+impl AcceptedMessage {
+    pub fn from_str(data: &String) -> AcceptedMessage {
         if data.len() == 0 {
-            return ReceivedData::None;
+            return AcceptedMessage::None;
         }
 
         println!("handled message: {data:?}");
-        let value = serde_json::from_str::<Received>(data).unwrap();
+        let value = serde_json::from_str::<_Received>(data).unwrap();
 
-        match AcceptMessageType::from_str(&value.request_type.to_string()) {
-            AcceptMessageType::GetMessages => ReceivedData::GetMessages,
+        match AcceptMessageType::from_str(&&value.message_type.to_string()) {
+            AcceptMessageType::GetMessages => AcceptedMessage::GetMessages,
             AcceptMessageType::SendMessage => {
-                let value = serde_json::from_str::<ReceivedMessage>(data).unwrap();
-                ReceivedData::PostMessage(value.message)
+                let rec = serde_json::from_str::<PostMessageDto>(data).unwrap();
+                AcceptedMessage::PostMessage(PostData {
+                    user_id: rec.user_id,
+                    password: rec.password,
+                    message: rec.message,
+                })
             }
         }
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct _Received {
+    message_type: String,
 }

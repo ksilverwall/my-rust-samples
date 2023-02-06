@@ -16,9 +16,9 @@ use std::{
     time::Duration,
 };
 
-use receiver::ReceivedData;
-use sender::Sendable;
 use local_talk::interface::SendMessageType;
+use receiver::{AcceptedMessage, PostData};
+use sender::Sendable;
 
 #[derive(sqlx::FromRow)]
 struct NoRecord {}
@@ -39,8 +39,8 @@ fn send_messages(p: &Pool<Postgres>, socket: TcpStream) {
     v.send(&socket);
 }
 
-fn accept_message(p: &Pool<Postgres>, ss: std::slice::Iter<TcpStream>, name: String, msg: String) {
-    block_on(sqlx::query_as::<_, NoRecord>("INSERT INTO main.records (user_name, posted_at, message) VALUES ($1, CURRENT_TIMESTAMP, $2)").bind(name).bind(msg).fetch_optional(p)).unwrap();
+fn accept_message(p: &Pool<Postgres>, ss: std::slice::Iter<TcpStream>, data: PostData) {
+    block_on(sqlx::query_as::<_, NoRecord>("INSERT INTO main.records (user_name, token, posted_at, message) VALUES ($1, $2, CURRENT_TIMESTAMP, $3)").bind(data.user_id).bind(data.password.as_bytes()).bind(data.message).fetch_optional(p)).unwrap();
     let v = sender::UpdatedNotification {
         response_type: SendMessageType::Updated.to_string(),
     };
@@ -76,14 +76,14 @@ fn accept_requests() -> Result<(), Error> {
                 thread::spawn(move || loop {
                     let mut rcv_data = String::new();
                     match reader.read_line(&mut rcv_data) {
-                        Ok(_) => match ReceivedData::from_str(&rcv_data) {
-                            ReceivedData::GetMessages => {
+                        Ok(_) => match AcceptedMessage::from_str(&rcv_data) {
+                            AcceptedMessage::GetMessages => {
                                 send_messages(&p, socket.try_clone().unwrap())
                             }
-                            ReceivedData::PostMessage(msg) => {
-                                accept_message(&p, ss.lock().unwrap().iter(), addr.to_string(), msg)
+                            AcceptedMessage::PostMessage(msg) => {
+                                accept_message(&p, ss.lock().unwrap().iter(), msg)
                             }
-                            ReceivedData::None => thread::sleep(Duration::from_millis(10)),
+                            AcceptedMessage::None => thread::sleep(Duration::from_millis(10)),
                         },
                         Err(e) => println!("no message: {e:?}"),
                     }

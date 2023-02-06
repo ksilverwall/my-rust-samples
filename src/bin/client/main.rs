@@ -11,18 +11,7 @@ use async_std::io::stdin;
 use futures::executor::block_on;
 use serde::Serialize;
 
-use local_talk::interface::AcceptMessageType;
-
-#[derive(Serialize)]
-struct GetMessageRequest {
-    request_type: String,
-}
-
-#[derive(Serialize)]
-struct SendMessageRequest {
-    request_type: String,
-    message: String,
-}
+use local_talk::interface::{AcceptMessageType, PostMessageDto, GetMessageDto};
 
 fn send_message<T: Serialize>(m_req: &T, socket: &mut TcpStream) -> Result<(), Error> {
     let content = serde_json::to_string(m_req).unwrap();
@@ -48,8 +37,8 @@ fn main() -> Result<(), Error> {
     });
 
     {
-        let m_req = GetMessageRequest {
-            request_type: AcceptMessageType::GetMessages.to_string(),
+        let m_req = GetMessageDto {
+            message_type: AcceptMessageType::GetMessages.to_string(),
         };
 
         send_message(&m_req, &mut sock).unwrap();
@@ -64,8 +53,10 @@ fn main() -> Result<(), Error> {
         println!("input send message:");
         block_on(i.read_line(&mut buf)).unwrap();
 
-        let m_req = SendMessageRequest {
-            request_type: AcceptMessageType::SendMessage.to_string(),
+        let m_req = PostMessageDto {
+            message_type: AcceptMessageType::SendMessage.to_string(),
+            user_id: "user_01".to_string(),
+            password: "sample".to_string(),
             message: buf.to_string(),
         };
 
