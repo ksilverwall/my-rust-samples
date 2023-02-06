@@ -47,6 +47,7 @@ services:
     depends_on:
       - server
     working_dir: /usr/src/myapp
+    init: true
     command: "/app/target/debug/client"
     profiles:
       - command
