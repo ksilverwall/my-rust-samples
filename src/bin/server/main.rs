@@ -39,6 +39,11 @@ enum ReceivedData {
     None,
 }
 
+#[derive(sqlx::FromRow, Serialize, Deserialize)]
+struct UpdatedNotification {
+    response_type: String,
+}
+
 fn send_messages(p: &Pool<Postgres>, socket: TcpStream) {
     let records = block_on(
         sqlx::query_as::<_, PostedRecord>("SELECT user_name, posted_at, message FROM main.records")
@@ -57,12 +62,15 @@ fn accept_message(
     p: &Pool<Postgres>,
     ss: std::slice::Iter<TcpStream>,
     name: String,
-    rcv_data: String,
+    msg: String,
 ) {
+    block_on(sqlx::query_as::<_, NoRecord>("INSERT INTO main.records (user_name, posted_at, message) VALUES ($1, CURRENT_TIMESTAMP, $2)").bind(name).bind(msg).fetch_optional(p)).unwrap();
+    let v = UpdatedNotification {
+        response_type: "UPDATED".to_string(),
+    };
     for s in ss {
-        BufWriter::new(s).write(rcv_data.as_bytes()).unwrap();
+        BufWriter::new(s).write(&serde_json::to_string(&v).unwrap().as_bytes()).unwrap();
     }
-    block_on(sqlx::query_as::<_, NoRecord>("INSERT INTO main.records (user_name, posted_at, message) VALUES ($1, CURRENT_TIMESTAMP, $2)").bind(name).bind(rcv_data).fetch_optional(p)).unwrap();
 }
 
 fn parse_reveived(data: &String) -> ReceivedData {
