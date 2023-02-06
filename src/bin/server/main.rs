@@ -24,8 +24,19 @@ struct PostedRecord {
 }
 
 #[derive(Serialize, Deserialize)]
-struct Revieved {
+struct Received {
     request_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ReceivedMessage {
+    message: String,
+}
+
+enum ReceivedData {
+    PostMessage(String),
+    GetMessages,
+    None,
 }
 
 fn send_messages(p: &Pool<Postgres>, socket: TcpStream) {
@@ -52,6 +63,24 @@ fn accept_message(
         BufWriter::new(s).write(rcv_data.as_bytes()).unwrap();
     }
     block_on(sqlx::query_as::<_, NoRecord>("INSERT INTO main.records (user_name, posted_at, message) VALUES ($1, CURRENT_TIMESTAMP, $2)").bind(name).bind(rcv_data).fetch_optional(p)).unwrap();
+}
+
+fn parse_reveived(data: &String) -> ReceivedData {
+    if data.len() == 0 {
+        return ReceivedData::None;
+    }
+
+    println!("handled message: {data:?}");
+    let value = serde_json::from_str::<Received>(data).unwrap();
+
+    match value.request_type.as_str() {
+        "GET_MESSAGES" => ReceivedData::GetMessages,
+        "SEND_MESSAGE" => {
+            let value = serde_json::from_str::<ReceivedMessage>(data).unwrap();
+            ReceivedData::PostMessage(value.message)
+        }
+        _ => panic!("unexpected message_type"),
+    }
 }
 
 fn accept_requests() -> Result<(), Error> {
@@ -81,26 +110,15 @@ fn accept_requests() -> Result<(), Error> {
                 thread::spawn(move || loop {
                     let mut rcv_data = String::new();
                     match reader.read_line(&mut rcv_data) {
-                        Ok(_) => {
-                            if rcv_data.len() == 0 {
-                                thread::sleep(Duration::from_millis(10))
-                            } else {
-                                println!("handled message: {rcv_data:?}");
-                                let value = serde_json::from_str::<Revieved>(&rcv_data).unwrap();
-
-                                if value.request_type == "SEND_MESSAGE" {
-                                    accept_message(
-                                        &p,
-                                        ss.lock().unwrap().iter(),
-                                        addr.to_string(),
-                                        rcv_data,
-                                    );
-                                }
-                                if value.request_type == "GET_MESSAGES" {
-                                    send_messages(&p, socket.try_clone().unwrap());
-                                }
+                        Ok(_) => match parse_reveived(&rcv_data) {
+                            ReceivedData::GetMessages => {
+                                send_messages(&p, socket.try_clone().unwrap())
                             }
-                        }
+                            ReceivedData::PostMessage(msg) => {
+                                accept_message(&p, ss.lock().unwrap().iter(), addr.to_string(), msg)
+                            }
+                            ReceivedData::None => thread::sleep(Duration::from_millis(10)),
+                        },
                         Err(e) => println!("no message: {e:?}"),
                     }
                 });
