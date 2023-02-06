@@ -2,99 +2,49 @@ extern crate daemonize;
 
 use daemonize::Daemonize;
 use futures::executor::block_on;
-use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::{
     env,
     fs::File,
-    io::{BufRead, BufReader, BufWriter, Error, Write},
+    io::{BufRead, BufReader, Error},
     net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
 
+mod receiver;
+mod sender;
+
+use receiver::ReceivedData;
+use sender::Sendable;
+
 #[derive(sqlx::FromRow)]
 struct NoRecord {}
 
-#[derive(sqlx::FromRow, Serialize, Deserialize)]
-struct PostedRecord {
-    user_name: String,
-    message: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct Received {
-    request_type: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct ReceivedMessage {
-    message: String,
-}
-
-enum ReceivedData {
-    PostMessage(String),
-    GetMessages,
-    None,
-}
-
-#[derive(sqlx::FromRow, Serialize, Deserialize)]
-struct RecordsLoadedNotification {
-    response_type: String,
-    records: Vec<PostedRecord>,
-}
-
-#[derive(sqlx::FromRow, Serialize, Deserialize)]
-struct UpdatedNotification {
-    response_type: String,
-}
-
-fn send_data<T: Serialize>(s: &TcpStream, v: &T) {
-    BufWriter::new(s)
-        .write(&(serde_json::to_string(v).unwrap() + "\r\n").as_bytes())
-        .unwrap();
-}
-
 fn send_messages(p: &Pool<Postgres>, socket: TcpStream) {
     let records = block_on(
-        sqlx::query_as::<_, PostedRecord>("SELECT user_name, posted_at, message FROM main.records")
-            .fetch_all(p),
+        sqlx::query_as::<_, sender::PostedRecord>(
+            "SELECT user_name, posted_at, message FROM main.records",
+        )
+        .fetch_all(p),
     )
     .unwrap();
 
-    let v = RecordsLoadedNotification {
+    let v = sender::RecordsLoadedNotification {
         response_type: "RECORDS_LOADED".to_string(),
         records: records,
     };
-    send_data(&socket, &v);
+    v.send(&socket);
 }
 
 fn accept_message(p: &Pool<Postgres>, ss: std::slice::Iter<TcpStream>, name: String, msg: String) {
     block_on(sqlx::query_as::<_, NoRecord>("INSERT INTO main.records (user_name, posted_at, message) VALUES ($1, CURRENT_TIMESTAMP, $2)").bind(name).bind(msg).fetch_optional(p)).unwrap();
-    let v = UpdatedNotification {
+    let v = sender::UpdatedNotification {
         response_type: "UPDATED".to_string(),
     };
     for s in ss {
-        send_data(s, &v);
-    }
-}
-
-fn parse_reveived(data: &String) -> ReceivedData {
-    if data.len() == 0 {
-        return ReceivedData::None;
-    }
-
-    println!("handled message: {data:?}");
-    let value = serde_json::from_str::<Received>(data).unwrap();
-
-    match value.request_type.as_str() {
-        "GET_MESSAGES" => ReceivedData::GetMessages,
-        "SEND_MESSAGE" => {
-            let value = serde_json::from_str::<ReceivedMessage>(data).unwrap();
-            ReceivedData::PostMessage(value.message)
-        }
-        _ => panic!("unexpected message_type"),
+        v.send(s);
     }
 }
 
@@ -125,7 +75,7 @@ fn accept_requests() -> Result<(), Error> {
                 thread::spawn(move || loop {
                     let mut rcv_data = String::new();
                     match reader.read_line(&mut rcv_data) {
-                        Ok(_) => match parse_reveived(&rcv_data) {
+                        Ok(_) => match ReceivedData::from_str(&rcv_data) {
                             ReceivedData::GetMessages => {
                                 send_messages(&p, socket.try_clone().unwrap())
                             }
