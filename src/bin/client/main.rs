@@ -1,12 +1,17 @@
 use std::{
     io::{BufRead, BufReader, Error, Write},
     net::TcpStream,
+    thread,
 };
 
 const HOST: &str = "server";
 const PORT: i32 = 10080;
 
+use async_std::io::stdin;
+use futures::executor::block_on;
 use serde::Serialize;
+
+use local_talk::interface::AcceptMessageType;
 
 #[derive(Serialize)]
 struct GetMessageRequest {
@@ -19,47 +24,51 @@ struct SendMessageRequest {
     message: String,
 }
 
+fn send_message<T: Serialize>(m_req: &T, socket: &mut TcpStream) -> Result<(), Error> {
+    let content = serde_json::to_string(m_req).unwrap();
+    socket.write_all((content + "\r\n").as_bytes())
+}
+
+fn accept_message(reader: &mut BufReader<TcpStream>) -> String {
+    let mut rcv_data = String::new();
+    reader.read_line(&mut rcv_data).unwrap();
+    rcv_data
+}
+
 fn main() -> Result<(), Error> {
     let mut sock = TcpStream::connect(format!("{HOST}:{PORT}")).expect("Failed to connect");
-
-    {
-        let m_req = GetMessageRequest {
-            request_type: "GET_MESSAGES".to_string(),
-        };
-
-        let content = serde_json::to_string(&m_req).unwrap();
-        match sock.write_all((content + "\r\n").as_bytes()) {
-            Ok(()) => println!("send GET MESSAGE request"),
-            Err(v) => println!("send test message failed:{}", v),
-        }
-    }
-
-    //
-    // Send Messages
-    //
-    let messages = ["Hello Tcp".to_string(), "World End".to_string()];
-    for m in messages {
-        let m_req = SendMessageRequest {
-            request_type: "SEND_MESSAGE".to_string(),
-            message: m,
-        };
-
-        let content = serde_json::to_string(&m_req).unwrap();
-        match sock.write_all((content + "\r\n").as_bytes()) {
-            Ok(()) => println!("send test message success"),
-            Err(v) => println!("send test message failed:{}", v),
-        }
-    }
 
     //
     // Receive Messages
     //
     let mut reader = BufReader::new(sock.try_clone().unwrap());
-    for _ in 0..3 {
-        let mut rcv_data = String::new();
-        reader.read_line(&mut rcv_data).unwrap();
-        print!("{rcv_data}");
+    thread::spawn(move || loop {
+        let s = accept_message(&mut reader);
+        println!("msg: {s}");
+    });
+
+    {
+        let m_req = GetMessageRequest {
+            request_type: AcceptMessageType::GetMessages.to_string(),
+        };
+
+        send_message(&m_req, &mut sock).unwrap();
     }
 
-    Ok(())
+    //
+    // Send Messages
+    //
+    let i = stdin();
+    loop {
+        let mut buf = String::new();
+        println!("input send message:");
+        block_on(i.read_line(&mut buf)).unwrap();
+
+        let m_req = SendMessageRequest {
+            request_type: AcceptMessageType::SendMessage.to_string(),
+            message: buf.to_string(),
+        };
+
+        send_message(&m_req, &mut sock).unwrap();
+    }
 }

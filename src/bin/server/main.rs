@@ -1,5 +1,8 @@
 extern crate daemonize;
 
+mod receiver;
+mod sender;
+
 use daemonize::Daemonize;
 use futures::executor::block_on;
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
@@ -13,11 +16,9 @@ use std::{
     time::Duration,
 };
 
-mod receiver;
-mod sender;
-
 use receiver::ReceivedData;
 use sender::Sendable;
+use local_talk::interface::SendMessageType;
 
 #[derive(sqlx::FromRow)]
 struct NoRecord {}
@@ -32,7 +33,7 @@ fn send_messages(p: &Pool<Postgres>, socket: TcpStream) {
     .unwrap();
 
     let v = sender::RecordsLoadedNotification {
-        response_type: "RECORDS_LOADED".to_string(),
+        response_type: SendMessageType::RecordsLoaded.to_string(),
         records: records,
     };
     v.send(&socket);
@@ -41,7 +42,7 @@ fn send_messages(p: &Pool<Postgres>, socket: TcpStream) {
 fn accept_message(p: &Pool<Postgres>, ss: std::slice::Iter<TcpStream>, name: String, msg: String) {
     block_on(sqlx::query_as::<_, NoRecord>("INSERT INTO main.records (user_name, posted_at, message) VALUES ($1, CURRENT_TIMESTAMP, $2)").bind(name).bind(msg).fetch_optional(p)).unwrap();
     let v = sender::UpdatedNotification {
-        response_type: "UPDATED".to_string(),
+        response_type: SendMessageType::Updated.to_string(),
     };
     for s in ss {
         v.send(s);

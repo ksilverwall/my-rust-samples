@@ -16,6 +16,8 @@ pub enum ReceivedData {
     None,
 }
 
+use local_talk::interface::AcceptMessageType;
+
 impl ReceivedData {
     pub fn from_str(data: &String) -> ReceivedData {
         if data.len() == 0 {
@@ -25,13 +27,12 @@ impl ReceivedData {
         println!("handled message: {data:?}");
         let value = serde_json::from_str::<Received>(data).unwrap();
 
-        match value.request_type.as_str() {
-            "GET_MESSAGES" => ReceivedData::GetMessages,
-            "SEND_MESSAGE" => {
+        match AcceptMessageType::from_str(&value.request_type.to_string()) {
+            AcceptMessageType::GetMessages => ReceivedData::GetMessages,
+            AcceptMessageType::SendMessage => {
                 let value = serde_json::from_str::<ReceivedMessage>(data).unwrap();
                 ReceivedData::PostMessage(value.message)
             }
-            _ => panic!("unexpected message_type"),
         }
     }
 }
