@@ -2,7 +2,8 @@ extern crate daemonize;
 
 use daemonize::Daemonize;
 use futures::executor::block_on;
-use sqlx::postgres::PgPoolOptions;
+use serde::{Deserialize, Serialize};
+use sqlx::{postgres::PgPoolOptions, Postgres, Pool};
 use std::{
     env,
     fs::File,
@@ -15,6 +16,22 @@ use std::{
 
 #[derive(sqlx::FromRow)]
 struct Record {}
+
+#[derive(Serialize, Deserialize)]
+struct Revieved {
+    request_type: String,
+}
+
+fn send_messages(p: &Pool<Postgres>, socket: TcpStream) {
+    // TODO: Implement here
+}
+
+fn accept_message(p: &Pool<Postgres>, ss: std::slice::Iter<TcpStream>, name: String, rcv_data: String) {
+    for s in ss {
+        BufWriter::new(s).write(rcv_data.as_bytes()).unwrap();
+    }
+    block_on(sqlx::query_as::<_, Record>("INSERT INTO main.records (user_name, posted_at, message) VALUES ($1, CURRENT_TIMESTAMP, $2)").bind(name).bind(rcv_data).fetch_optional(p)).unwrap();
+}
 
 fn accept_requests() -> Result<(), Error> {
     let database_url = "postgresql://app:appPassword@database:5432/lt";
@@ -48,10 +65,14 @@ fn accept_requests() -> Result<(), Error> {
                                 thread::sleep(Duration::from_millis(10))
                             } else {
                                 println!("handled message: {rcv_data:?}");
-                                for s in ss.lock().unwrap().iter() {
-                                    BufWriter::new(s).write(rcv_data.as_bytes()).unwrap();
+                                let value = serde_json::from_str::<Revieved>(&rcv_data).unwrap();
+
+                                if value.request_type == "SEND_MESSAGE" {
+                                    accept_message(&p, ss.lock().unwrap().iter(), addr.to_string(), rcv_data);
                                 }
-                                block_on(sqlx::query_as::<_, Record>("INSERT INTO main.records (user_name, posted_at, message) VALUES ($1, CURRENT_TIMESTAMP, $2)").bind(addr.to_string()).bind(rcv_data).fetch_optional(&p)).unwrap();
+                                if value.request_type == "GET_MESSAGES" {
+                                    send_messages(&p, socket.try_clone().unwrap());
+                                }
                             }
                         }
                         Err(e) => println!("no message: {e:?}"),

@@ -24,7 +24,7 @@ fn main() -> Result<(), Error> {
 
     {
         let m_req = GetMessageRequest {
-            request_type: "GET_MESSAGE".to_string(),
+            request_type: "GET_MESSAGES".to_string(),
         };
 
         let content = serde_json::to_string(&m_req).unwrap();
