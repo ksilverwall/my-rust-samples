@@ -3,7 +3,7 @@ extern crate daemonize;
 use daemonize::Daemonize;
 use futures::executor::block_on;
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgPoolOptions, Postgres, Pool};
+use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::{
     env,
     fs::File,
@@ -15,7 +15,13 @@ use std::{
 };
 
 #[derive(sqlx::FromRow)]
-struct Record {}
+struct NoRecord {}
+
+#[derive(sqlx::FromRow, Serialize, Deserialize)]
+struct PostedRecord {
+    user_name: String,
+    message: String,
+}
 
 #[derive(Serialize, Deserialize)]
 struct Revieved {
@@ -23,14 +29,29 @@ struct Revieved {
 }
 
 fn send_messages(p: &Pool<Postgres>, socket: TcpStream) {
-    // TODO: Implement here
+    let records = block_on(
+        sqlx::query_as::<_, PostedRecord>("SELECT user_name, posted_at, message FROM main.records")
+            .fetch_all(p),
+    )
+    .unwrap();
+
+    let mut w = BufWriter::new(socket);
+    for r in records {
+        w.write((serde_json::to_string(&r).unwrap() + "\r\r").as_bytes())
+            .unwrap();
+    }
 }
 
-fn accept_message(p: &Pool<Postgres>, ss: std::slice::Iter<TcpStream>, name: String, rcv_data: String) {
+fn accept_message(
+    p: &Pool<Postgres>,
+    ss: std::slice::Iter<TcpStream>,
+    name: String,
+    rcv_data: String,
+) {
     for s in ss {
         BufWriter::new(s).write(rcv_data.as_bytes()).unwrap();
     }
-    block_on(sqlx::query_as::<_, Record>("INSERT INTO main.records (user_name, posted_at, message) VALUES ($1, CURRENT_TIMESTAMP, $2)").bind(name).bind(rcv_data).fetch_optional(p)).unwrap();
+    block_on(sqlx::query_as::<_, NoRecord>("INSERT INTO main.records (user_name, posted_at, message) VALUES ($1, CURRENT_TIMESTAMP, $2)").bind(name).bind(rcv_data).fetch_optional(p)).unwrap();
 }
 
 fn accept_requests() -> Result<(), Error> {
@@ -68,7 +89,12 @@ fn accept_requests() -> Result<(), Error> {
                                 let value = serde_json::from_str::<Revieved>(&rcv_data).unwrap();
 
                                 if value.request_type == "SEND_MESSAGE" {
-                                    accept_message(&p, ss.lock().unwrap().iter(), addr.to_string(), rcv_data);
+                                    accept_message(
+                                        &p,
+                                        ss.lock().unwrap().iter(),
+                                        addr.to_string(),
+                                        rcv_data,
+                                    );
                                 }
                                 if value.request_type == "GET_MESSAGES" {
                                     send_messages(&p, socket.try_clone().unwrap());
