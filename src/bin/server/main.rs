@@ -40,8 +40,20 @@ enum ReceivedData {
 }
 
 #[derive(sqlx::FromRow, Serialize, Deserialize)]
+struct RecordsLoadedNotification {
+    response_type: String,
+    records: Vec<PostedRecord>,
+}
+
+#[derive(sqlx::FromRow, Serialize, Deserialize)]
 struct UpdatedNotification {
     response_type: String,
+}
+
+fn send_data<T: Serialize>(s: &TcpStream, v: &T) {
+    BufWriter::new(s)
+        .write(&(serde_json::to_string(v).unwrap() + "\r\n").as_bytes())
+        .unwrap();
 }
 
 fn send_messages(p: &Pool<Postgres>, socket: TcpStream) {
@@ -51,11 +63,11 @@ fn send_messages(p: &Pool<Postgres>, socket: TcpStream) {
     )
     .unwrap();
 
-    let mut w = BufWriter::new(socket);
-    for r in records {
-        w.write((serde_json::to_string(&r).unwrap() + "\r\r").as_bytes())
-            .unwrap();
-    }
+    let v = RecordsLoadedNotification {
+        response_type: "RECORDS_LOADED".to_string(),
+        records: records,
+    };
+    send_data(&socket, &v);
 }
 
 fn accept_message(p: &Pool<Postgres>, ss: std::slice::Iter<TcpStream>, name: String, msg: String) {
@@ -64,9 +76,7 @@ fn accept_message(p: &Pool<Postgres>, ss: std::slice::Iter<TcpStream>, name: Str
         response_type: "UPDATED".to_string(),
     };
     for s in ss {
-        BufWriter::new(s)
-            .write(&(serde_json::to_string(&v).unwrap() + "\r\n").as_bytes())
-            .unwrap();
+        send_data(s, &v);
     }
 }
 
