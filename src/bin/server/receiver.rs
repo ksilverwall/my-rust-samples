@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use local_talk::interface::{AcceptMessageType, PostMessageDto};
+use local_talk::interface::{AcceptMessageType, PostMessageDto, DeleteMessageDto};
 
 #[derive(Serialize, Deserialize)]
 pub struct PostData {
@@ -9,9 +9,15 @@ pub struct PostData {
     pub message: String,
 }
 
+pub struct DeleteData {
+    pub user_id: String,
+    pub password: String,
+}
+
 pub enum AcceptedMessage {
     PostMessage(PostData),
     GetMessages,
+    DeleteMessage(DeleteData),
     None,
 }
 
@@ -32,6 +38,13 @@ impl AcceptedMessage {
                     user_id: rec.user_id,
                     password: rec.password,
                     message: rec.message,
+                })
+            }
+            AcceptMessageType::DeleteMessage => {
+                let rec = serde_json::from_str::<DeleteMessageDto>(data).unwrap();
+                AcceptedMessage::DeleteMessage(DeleteData {
+                    user_id: rec.user_id,
+                    password: rec.password,
                 })
             }
         }

@@ -3,13 +3,16 @@ use serde::{Serialize, Deserialize};
 pub enum AcceptMessageType {
     GetMessages,
     SendMessage,
+    DeleteMessage,
 }
 
 impl AcceptMessageType {
     pub fn from_str(s: &str) -> AcceptMessageType {
+
         match s {
             "GET_MESSAGES" => AcceptMessageType::GetMessages,
             "SEND_MESSAGE" => AcceptMessageType::SendMessage,
+            "DELETE_MESSAGE" => AcceptMessageType::SendMessage,
             _ => panic!("unexpected message_type"),
         }
     }
@@ -17,6 +20,7 @@ impl AcceptMessageType {
         match self {
             AcceptMessageType::GetMessages => "GET_MESSAGES".to_string(),
             AcceptMessageType::SendMessage => "SEND_MESSAGE".to_string(),
+            AcceptMessageType::DeleteMessage => "DELETE_MESSAGE".to_string(),
         }
     }
 }
@@ -54,4 +58,11 @@ pub struct PostMessageDto {
     pub user_id: String,
     pub password: String,
     pub message: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DeleteMessageDto {
+    pub message_type: String,
+    pub user_id: String,
+    pub password: String,
 }

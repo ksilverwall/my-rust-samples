@@ -2,10 +2,11 @@ extern crate daemonize;
 
 mod receiver;
 mod sender;
+mod storage;
 
 use daemonize::Daemonize;
 use futures::executor::block_on;
-use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
+use sqlx::postgres::PgPoolOptions;
 use std::{
     env,
     fs::File,
@@ -17,36 +18,33 @@ use std::{
 };
 
 use local_talk::interface::SendMessageType;
-use receiver::{AcceptedMessage, PostData};
+use receiver::{AcceptedMessage, DeleteData, PostData};
 use sender::Sendable;
+use storage::PostStrageManager;
 
-#[derive(sqlx::FromRow)]
-struct NoRecord {}
-
-fn send_messages(p: &Pool<Postgres>, socket: TcpStream) {
-    let records = block_on(
-        sqlx::query_as::<_, sender::PostedRecord>(
-            "SELECT user_name, posted_at, message FROM main.records",
-        )
-        .fetch_all(p),
-    )
-    .unwrap();
-
+fn send_messages(da: &PostStrageManager, socket: TcpStream) {
     let v = sender::RecordsLoadedNotification {
         response_type: SendMessageType::RecordsLoaded.to_string(),
-        records: records,
+        records: da.load(),
     };
     v.send(&socket);
 }
 
-fn accept_message(p: &Pool<Postgres>, ss: std::slice::Iter<TcpStream>, data: PostData) {
-    block_on(sqlx::query_as::<_, NoRecord>("INSERT INTO main.records (user_name, token, posted_at, message) VALUES ($1, $2, CURRENT_TIMESTAMP, $3)").bind(data.user_id).bind(data.password.as_bytes()).bind(data.message).fetch_optional(p)).unwrap();
+fn accept_message(da: &PostStrageManager, ss: std::slice::Iter<TcpStream>, data: PostData) {
+    da.push(&data.user_id, &data.password, &data.message);
     let v = sender::UpdatedNotification {
         response_type: SendMessageType::Updated.to_string(),
     };
     for s in ss {
         v.send(s);
     }
+}
+
+fn delete_message(da: &PostStrageManager, data: DeleteData) {
+    da.delete(&data.user_id, &data.password);
+    sender::UpdatedNotification {
+        response_type: SendMessageType::Updated.to_string(),
+    };
 }
 
 fn accept_requests() -> Result<(), Error> {
@@ -72,17 +70,19 @@ fn accept_requests() -> Result<(), Error> {
                     .push(socket.try_clone().unwrap());
 
                 let ss = Arc::clone(&sockets);
-                let p = pool.clone();
+                let da = PostStrageManager::new(pool.clone());
+
                 thread::spawn(move || loop {
                     let mut rcv_data = String::new();
                     match reader.read_line(&mut rcv_data) {
                         Ok(_) => match AcceptedMessage::from_str(&rcv_data) {
                             AcceptedMessage::GetMessages => {
-                                send_messages(&p, socket.try_clone().unwrap())
+                                send_messages(&da, socket.try_clone().unwrap())
                             }
                             AcceptedMessage::PostMessage(msg) => {
-                                accept_message(&p, ss.lock().unwrap().iter(), msg)
+                                accept_message(&da, ss.lock().unwrap().iter(), msg)
                             }
+                            AcceptedMessage::DeleteMessage(msg) => delete_message(&da, msg),
                             AcceptedMessage::None => thread::sleep(Duration::from_millis(10)),
                         },
                         Err(e) => println!("no message: {e:?}"),
