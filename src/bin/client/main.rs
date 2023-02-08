@@ -1,5 +1,9 @@
+extern crate ed25519_dalek;
+extern crate rand;
+
 use std::{
-    io::{stdin, BufRead, BufReader, BufWriter, Error, Write},
+    fs::File,
+    io::{stdin, BufRead, BufReader, BufWriter, Error, Read, Write},
     net::TcpStream,
     thread,
 };
@@ -7,6 +11,8 @@ use std::{
 const HOST: &str = "server";
 const PORT: i32 = 10080;
 
+use ed25519_dalek::{Keypair, SignatureError};
+use rand::rngs::OsRng;
 use serde::Serialize;
 
 use local_talk::interface::{AcceptMessageType, GetMessageDto, PostMessageDto};
@@ -23,7 +29,7 @@ fn accept_message(reader: &mut BufReader<TcpStream>) -> String {
     rcv_data
 }
 
-fn interactive_start() {
+fn interactive_start(keypair: &Keypair) {
     let mut sock = TcpStream::connect(format!("{HOST}:{PORT}")).expect("Failed to connect");
 
     //
@@ -63,6 +69,36 @@ fn interactive_start() {
     }
 }
 
+const FILE_PATH: &str = "/app/local/key-pair";
+
+fn write_key_pair(keypair: &Keypair) {
+    File::create(FILE_PATH)
+        .unwrap()
+        .write_all(&keypair.to_bytes())
+        .unwrap();
+}
+
+fn load_key_pair() -> Result<Keypair, SignatureError> {
+    let mut buffer = Vec::<u8>::new();
+    File::open(FILE_PATH)
+        .unwrap()
+        .read_to_end(&mut buffer)
+        .unwrap();
+
+    Keypair::from_bytes(&buffer)
+}
+
 fn main() {
-    interactive_start();
+    let key_pair = match load_key_pair() {
+        Ok(key) => key,
+        Err(_) => {
+            let mut csprng = OsRng {};
+            let keypair: Keypair = Keypair::generate(&mut csprng);
+
+            write_key_pair(&keypair);
+            keypair
+        }
+    };
+
+    interactive_start(&key_pair);
 }

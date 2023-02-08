@@ -45,6 +45,7 @@ services:
       - network-1
     volumes:
       - cargo-target:/app/target
+      - user-local:/app/local
     depends_on:
       - server
     init: true
@@ -57,6 +58,7 @@ volumes:
   cargo-registry:
   cargo-target:
   db-store:
+  user-local:
 
 networks:
   network-1:
