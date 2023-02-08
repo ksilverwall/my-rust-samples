@@ -1,5 +1,5 @@
 use std::{
-    io::{BufRead, BufReader, Error, Write},
+    io::{stdin, BufRead, BufReader, BufWriter, Error, Write},
     net::TcpStream,
     thread,
 };
@@ -7,15 +7,14 @@ use std::{
 const HOST: &str = "server";
 const PORT: i32 = 10080;
 
-use async_std::io::stdin;
-use futures::executor::block_on;
 use serde::Serialize;
 
-use local_talk::interface::{AcceptMessageType, PostMessageDto, GetMessageDto};
+use local_talk::interface::{AcceptMessageType, GetMessageDto, PostMessageDto};
 
 fn send_message<T: Serialize>(m_req: &T, socket: &mut TcpStream) -> Result<(), Error> {
+    let mut writer = BufWriter::new(socket.try_clone().unwrap());
     let content = serde_json::to_string(m_req).unwrap();
-    socket.write_all((content + "\r\n").as_bytes())
+    writer.write_all((content + "\r\n").as_bytes())
 }
 
 fn accept_message(reader: &mut BufReader<TcpStream>) -> String {
@@ -24,7 +23,7 @@ fn accept_message(reader: &mut BufReader<TcpStream>) -> String {
     rcv_data
 }
 
-fn main() -> Result<(), Error> {
+fn interactive_start() {
     let mut sock = TcpStream::connect(format!("{HOST}:{PORT}")).expect("Failed to connect");
 
     //
@@ -51,7 +50,7 @@ fn main() -> Result<(), Error> {
     loop {
         let mut buf = String::new();
         println!("input send message:");
-        block_on(i.read_line(&mut buf)).unwrap();
+        i.read_line(&mut buf).unwrap();
 
         let m_req = PostMessageDto {
             message_type: AcceptMessageType::SendMessage.to_string(),
@@ -62,4 +61,8 @@ fn main() -> Result<(), Error> {
 
         send_message(&m_req, &mut sock).unwrap();
     }
+}
+
+fn main() {
+    interactive_start();
 }
