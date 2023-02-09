@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use local_talk::interface::{AcceptMessageType, PostMessageDto, DeleteMessageDto};
+use local_talk::interface::{AcceptMessageType, DeleteMessageDto, PostMessageDto};
 
 #[derive(Serialize, Deserialize)]
 pub struct PostData {
@@ -32,20 +32,28 @@ impl AcceptedMessage {
 
         match AcceptMessageType::from_str(&&value.message_type.to_string()) {
             AcceptMessageType::GetMessages => AcceptedMessage::GetMessages,
-            AcceptMessageType::SendMessage => {
-                let rec = serde_json::from_str::<PostMessageDto>(data).unwrap();
-                AcceptedMessage::PostMessage(PostData {
+            AcceptMessageType::SendMessage => match serde_json::from_str::<PostMessageDto>(data) {
+                Ok(rec) => AcceptedMessage::PostMessage(PostData {
                     user_id: rec.user_id,
                     password: rec.password,
                     message: rec.message,
-                })
-            }
+                }),
+                Err(err) => {
+                    println!("Failed to parse send message");
+                    panic!("{err}");
+                }
+            },
             AcceptMessageType::DeleteMessage => {
-                let rec = serde_json::from_str::<DeleteMessageDto>(data).unwrap();
-                AcceptedMessage::DeleteMessage(DeleteData {
-                    user_id: rec.user_id,
-                    password: rec.password,
-                })
+                match serde_json::from_str::<DeleteMessageDto>(data) {
+                    Ok(rec) => AcceptedMessage::DeleteMessage(DeleteData {
+                        user_id: rec.user_id,
+                        password: rec.password,
+                    }),
+                    Err(err) => {
+                        println!("Failed to parse delete message");
+                        panic!("{err}");
+                    }
+                }
             }
         }
     }

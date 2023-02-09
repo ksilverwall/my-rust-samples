@@ -8,19 +8,18 @@ pub enum AcceptMessageType {
 
 impl AcceptMessageType {
     pub fn from_str(s: &str) -> AcceptMessageType {
-
         match s {
             "GET_MESSAGES" => AcceptMessageType::GetMessages,
             "SEND_MESSAGE" => AcceptMessageType::SendMessage,
-            "DELETE_MESSAGE" => AcceptMessageType::SendMessage,
+            "DELETE_MESSAGE" => AcceptMessageType::DeleteMessage,
             _ => panic!("unexpected message_type"),
         }
     }
-    pub fn to_string(&self) -> String {
+    pub fn to_str(&self) -> &str {
         match self {
-            AcceptMessageType::GetMessages => "GET_MESSAGES".to_string(),
-            AcceptMessageType::SendMessage => "SEND_MESSAGE".to_string(),
-            AcceptMessageType::DeleteMessage => "DELETE_MESSAGE".to_string(),
+            AcceptMessageType::GetMessages => "GET_MESSAGES",
+            AcceptMessageType::SendMessage => "SEND_MESSAGE",
+            AcceptMessageType::DeleteMessage => "DELETE_MESSAGE",
         }
     }
 }

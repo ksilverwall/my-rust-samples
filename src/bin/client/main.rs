@@ -3,7 +3,7 @@ extern crate rand;
 
 use std::{
     fs::File,
-    io::{stdin, stdout, BufRead, BufReader, BufWriter, Error, Read, Write},
+    io::{stdin, BufRead, BufReader, BufWriter, Error, Read, Write},
     net::TcpStream,
     thread,
 };
@@ -15,7 +15,7 @@ use ed25519_dalek::{Keypair, SignatureError};
 use rand::rngs::OsRng;
 use serde::Serialize;
 
-use local_talk::interface::{AcceptMessageType, GetMessageDto, PostMessageDto, DeleteMessageDto};
+use local_talk::interface::{AcceptMessageType, DeleteMessageDto, GetMessageDto, PostMessageDto};
 
 fn send_message<T: Serialize>(m_req: &T, socket: &mut TcpStream) -> Result<(), Error> {
     let mut writer = BufWriter::new(socket.try_clone().unwrap());
@@ -29,7 +29,7 @@ fn accept_message(reader: &mut BufReader<TcpStream>) -> String {
     rcv_data
 }
 
-fn interactive_start(keypair: &Keypair) {
+fn interactive_start(_keypair: &Keypair) {
     let mut sock = TcpStream::connect(format!("{HOST}:{PORT}")).expect("Failed to connect");
 
     //
@@ -54,14 +54,14 @@ fn interactive_start(keypair: &Keypair) {
         match phrase[0] {
             "get" => {
                 let m_req = GetMessageDto {
-                    message_type: AcceptMessageType::GetMessages.to_string(),
+                    message_type: AcceptMessageType::GetMessages.to_str().to_string(),
                 };
 
                 send_message(&m_req, &mut sock).unwrap();
             }
             "post" => {
                 let m_req = PostMessageDto {
-                    message_type: AcceptMessageType::SendMessage.to_string(),
+                    message_type: AcceptMessageType::SendMessage.to_str().to_string(),
                     user_id: "user_01".to_string(),
                     password: "sample".to_string(),
                     message: phrase[1].to_string(),
@@ -71,13 +71,13 @@ fn interactive_start(keypair: &Keypair) {
             }
             "delete" => {
                 let m_req = DeleteMessageDto {
-                    message_type: AcceptMessageType::DeleteMessage.to_string(),
+                    message_type: AcceptMessageType::DeleteMessage.to_str().to_string(),
                     user_id: "user_01".to_string(),
                     password: "sample".to_string(),
                 };
 
                 send_message(&m_req, &mut sock).unwrap();
-            },
+            }
             _ => println!("not implemented"),
         }
     }
