@@ -3,7 +3,7 @@ extern crate rand;
 
 use std::{
     fs::File,
-    io::{stdin, BufRead, BufReader, BufWriter, Error, Read, Write},
+    io::{stdin, stdout, BufRead, BufReader, BufWriter, Error, Read, Write},
     net::TcpStream,
     thread,
 };
@@ -15,7 +15,7 @@ use ed25519_dalek::{Keypair, SignatureError};
 use rand::rngs::OsRng;
 use serde::Serialize;
 
-use local_talk::interface::{AcceptMessageType, GetMessageDto, PostMessageDto};
+use local_talk::interface::{AcceptMessageType, GetMessageDto, PostMessageDto, DeleteMessageDto};
 
 fn send_message<T: Serialize>(m_req: &T, socket: &mut TcpStream) -> Result<(), Error> {
     let mut writer = BufWriter::new(socket.try_clone().unwrap());
@@ -41,31 +41,45 @@ fn interactive_start(keypair: &Keypair) {
         println!("msg: {s}");
     });
 
-    {
-        let m_req = GetMessageDto {
-            message_type: AcceptMessageType::GetMessages.to_string(),
-        };
-
-        send_message(&m_req, &mut sock).unwrap();
-    }
-
     //
     // Send Messages
     //
     let i = stdin();
     loop {
         let mut buf = String::new();
-        println!("input send message:");
         i.read_line(&mut buf).unwrap();
 
-        let m_req = PostMessageDto {
-            message_type: AcceptMessageType::SendMessage.to_string(),
-            user_id: "user_01".to_string(),
-            password: "sample".to_string(),
-            message: buf.to_string(),
-        };
+        let phrase: Vec<&str> = buf.trim().split(" ").collect();
 
-        send_message(&m_req, &mut sock).unwrap();
+        match phrase[0] {
+            "get" => {
+                let m_req = GetMessageDto {
+                    message_type: AcceptMessageType::GetMessages.to_string(),
+                };
+
+                send_message(&m_req, &mut sock).unwrap();
+            }
+            "post" => {
+                let m_req = PostMessageDto {
+                    message_type: AcceptMessageType::SendMessage.to_string(),
+                    user_id: "user_01".to_string(),
+                    password: "sample".to_string(),
+                    message: phrase[1].to_string(),
+                };
+
+                send_message(&m_req, &mut sock).unwrap();
+            }
+            "delete" => {
+                let m_req = DeleteMessageDto {
+                    message_type: AcceptMessageType::DeleteMessage.to_string(),
+                    user_id: "user_01".to_string(),
+                    password: "sample".to_string(),
+                };
+
+                send_message(&m_req, &mut sock).unwrap();
+            },
+            _ => println!("not implemented"),
+        }
     }
 }
 
