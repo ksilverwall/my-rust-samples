@@ -7,3 +7,11 @@ CREATE TABLE main.records (
   message TEXT,
   PRIMARY KEY (user_name, posted_at)
 );
+
+CREATE TABLE main.transactions(
+  id SERIAL NOT NULL,
+  action_summary TEXT, -- Expected JSON
+  signiture bytea, -- for action_summary
+  public_key bytea,
+  PRIMARY KEY (id)
+);
