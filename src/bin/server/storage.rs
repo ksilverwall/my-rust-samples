@@ -1,6 +1,7 @@
 use crate::sender::PostedRecord;
 use futures::executor::block_on;
 use sqlx::{Pool, Postgres};
+use uuid::Uuid;
 
 pub struct PostStrageManager {
     pool: Pool<Postgres>,
@@ -13,7 +14,7 @@ impl PostStrageManager {
     pub fn load(&self) -> Vec<PostedRecord> {
         block_on(
             sqlx::query_as::<_, PostedRecord>(
-                "SELECT user_name, posted_at, message FROM main.records",
+                "SELECT id, user_name, posted_at, message FROM main.records",
             )
             .fetch_all(&self.pool),
         )
@@ -22,8 +23,9 @@ impl PostStrageManager {
     pub fn push(&self, user_id: &String, password: &String, message: &String) {
         block_on(
         sqlx::query_as::<_, NoRecord>(
-            "INSERT INTO main.records (user_name, token, posted_at, message) VALUES ($1, $2, CURRENT_TIMESTAMP, $3)"
+            "INSERT INTO main.records (id, user_name, token, posted_at, message) VALUES ($1, $2, $3 CURRENT_TIMESTAMP, $4)"
         )
+        .bind(Uuid::new_v4().as_bytes())
         .bind(user_id)
         .bind(password.as_bytes())
         .bind(message)
