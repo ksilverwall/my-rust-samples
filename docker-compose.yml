@@ -1,6 +1,44 @@
 version: "3.9"
 
 services:
+  geth01:
+    build: ./docker/images/ethereum
+    networks:
+      ethereum:
+        ipv4_address: ${NODE01_IP:?}
+    ports:
+      - "8545:8545"
+    volumes:
+      - ./.tmp:/root/.tmp
+      - ./docker/files/node01/:/root/files/
+      - ./docker/files/shared/:/root/files/shared
+    environment:
+      GENESIS_FILE: ./files/shared/genesis.json
+      DATA_DIR: .tmp/node01
+    working_dir: /root
+    command: [
+      "--networkid", "${NETWORK_ID:?}",
+      "--authrpc.port", "8551",
+
+      "--http",
+      "--http.api", "eth,personal",
+      "--http.addr", "0.0.0.0",
+      "--http.vhosts", "*",
+      "--allow-insecure-unlock",
+
+      "--nodekey", "./files/nodekey",
+      "--keystore", "./files/keystore",
+      # Miner unlocking
+      "--unlock", "0x6ce0ba981dd9b3bc259bbd868be14f957dbe6dcf",
+      "--password", "./files/password_6ce0ba981dd9b3bc259bbd868be14f957dbe6dcf.txt",
+      # Mining (PoA)
+      "--mine",
+      "--miner.etherbase", "0x6ce0ba981dd9b3bc259bbd868be14f957dbe6dcf",
+      # Bootstrap Node Settings
+      "--port", "${NODE01_PORT:?}",
+      "-nat", "extip:${NODE01_IP:?}",
+    ]
+
   #
   # Services
   #
@@ -10,7 +48,7 @@ services:
       - server-local
     volumes:
       - db-store:/var/lib/postgresql/data
-      - ./container/database/scripts:/docker-entrypoint-initdb.d
+      - ./docker/database/scripts:/docker-entrypoint-initdb.d
     environment:
       - POSTGRES_PASSWORD=mysecretpassword
   server:
@@ -27,7 +65,20 @@ services:
   #
   # Commands
   #
+
+  geth:
+    profiles: [command]
+    build: ./docker/images/ethereum
+    networks:
+      ethereum:
+    volumes:
+      - ./:/root
+    working_dir: /root
+    entrypoint: geth
+    command: attach .tmp/node01/geth.ipc
+
   build:
+    profiles: [command]
     image: rust
     volumes:
       - ./:/usr/src/myapp
@@ -37,12 +88,13 @@ services:
     command: "cargo build"
     environment:
       - CARGO_BUILD_TARGET_DIR=/app/target
-    profiles:
-      - command
+
   client:
+    profiles: [command]
     image: rust
     networks:
       - network-1
+      - ethereum
     volumes:
       - cargo-target:/app/target
       - user-local:/app/local
@@ -51,8 +103,6 @@ services:
     init: true
     working_dir: /usr/src/myapp
     command: "/app/target/debug/client"
-    profiles:
-      - command
 
 volumes:
   cargo-registry:
@@ -61,5 +111,10 @@ volumes:
   user-local:
 
 networks:
+  ethereum:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
   network-1:
   server-local:
