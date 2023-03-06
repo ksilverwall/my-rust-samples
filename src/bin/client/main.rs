@@ -5,13 +5,14 @@ use std::{
     fs::File,
     io::{stdin, BufRead, BufReader, BufWriter, Error, Read, Write},
     net::TcpStream,
+    path::Path,
     thread,
 };
 
 const HOST: &str = "server";
 const PORT: i32 = 10080;
 
-use ed25519_dalek::{Keypair, SignatureError};
+use ed25519_dalek::Keypair;
 use futures::executor::block_on;
 use rand::rngs::OsRng;
 use serde::Serialize;
@@ -36,19 +37,24 @@ fn accept_message(reader: &mut BufReader<TcpStream>) -> String {
 }
 
 fn interactive_start(keypair: &Keypair) {
+    println!("starting...");
+
     let mut sock = TcpStream::connect(format!("{HOST}:{PORT}")).expect("Failed to connect");
     let database_url = "postgresql://app:appPassword@database:5432/lt";
 
-    let pool = block_on(
+    let pool = match block_on(
         PgPoolOptions::new()
             .max_connections(10)
             .connect(database_url),
-    )
-    .unwrap();
- 
-    let writer = Writer {
-        pool: pool,
+    ) {
+        Ok(p) => p,
+        Err(e) => {
+            println!("failed to connect database: '{e}'");
+            return;
+        }
     };
+
+    let writer = Writer { pool: pool };
 
     //
     // Receive Messages
@@ -56,6 +62,11 @@ fn interactive_start(keypair: &Keypair) {
     let mut reader = BufReader::new(sock.try_clone().unwrap());
     thread::spawn(move || loop {
         let s = accept_message(&mut reader);
+        if s.len() == 0 {
+            println!("msg length is zero");
+            println!("NOTE: on connecion closed, accept_message returns zero length eternal");
+            break;
+        }
         println!("msg: {s}");
     });
 
@@ -63,21 +74,45 @@ fn interactive_start(keypair: &Keypair) {
     // Send Messages
     //
     let i = stdin();
+    println!("done!!");
+    println!("input your message");
+
+    enum Command {
+        Unknown(String),
+        Get,
+        Post,
+        Delete,
+    }
+
+    impl Command {
+        fn parse(value: &str) -> Command {
+            match value {
+                "get" => Command::Get,
+                "post" => Command::Post,
+                "delete" => Command::Delete,
+                _ => Command::Unknown(value.to_string()),
+            }
+        }
+    }
     loop {
         let mut buf = String::new();
         i.read_line(&mut buf).unwrap();
 
         let phrase: Vec<&str> = buf.trim().split(" ").collect();
 
-        match phrase[0] {
-            "get" => {
+        match Command::parse(phrase[0]) {
+            Command::Get => {
                 let m_req = GetMessageDto {
                     message_type: AcceptMessageType::GetMessages.to_str().to_string(),
                 };
 
                 send_message(&m_req, &mut sock).unwrap();
             }
-            "post" => {
+            Command::Post => {
+                if phrase.len() < 2 {
+                    println!("need any message");
+                    continue;
+                }
                 let user_id = "user_01".to_string();
                 let password = "sample".to_string();
                 let message = phrase[1].to_string();
@@ -102,7 +137,7 @@ fn interactive_start(keypair: &Keypair) {
 
                 send_message(&m_req, &mut sock).unwrap();
             }
-            "delete" => {
+            Command::Delete => {
                 let message_type = AcceptMessageType::DeleteMessage.to_str().to_string();
                 let user_id = "user_01".to_string();
                 let password = "sample".to_string();
@@ -122,7 +157,7 @@ fn interactive_start(keypair: &Keypair) {
 
                 send_message(&m_req, &mut sock).unwrap();
             }
-            _ => println!("not implemented"),
+            Command::Unknown(s) => println!("command '{s}' not implemented, "),
         }
     }
 }
@@ -136,26 +171,29 @@ fn write_key_pair(keypair: &Keypair) {
         .unwrap();
 }
 
-fn load_key_pair() -> Result<Keypair, SignatureError> {
+fn load_key_pair() -> Keypair {
     let mut buffer = Vec::<u8>::new();
-    File::open(FILE_PATH)
+
+    let file_path = Path::new(FILE_PATH);
+
+    File::open(file_path)
         .unwrap()
         .read_to_end(&mut buffer)
         .unwrap();
 
-    Keypair::from_bytes(&buffer)
+    Keypair::from_bytes(&buffer).unwrap()
 }
 
 fn main() {
-    let key_pair = match load_key_pair() {
-        Ok(key) => key,
-        Err(_) => {
-            let mut csprng = OsRng {};
-            let keypair: Keypair = Keypair::generate(&mut csprng);
+    let file_path = Path::new(FILE_PATH);
+    let key_pair = if file_path.exists() {
+        load_key_pair()
+    } else {
+        let mut csprng = OsRng {};
+        let keypair: Keypair = Keypair::generate(&mut csprng);
 
-            write_key_pair(&keypair);
-            keypair
-        }
+        write_key_pair(&keypair);
+        keypair
     };
 
     interactive_start(&key_pair);

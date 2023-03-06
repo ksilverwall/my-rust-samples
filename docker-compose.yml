@@ -46,6 +46,7 @@ services:
     image: postgres
     networks:
       - server-local
+      - network-1
     volumes:
       - db-store:/var/lib/postgresql/data
       - ./docker/database/scripts:/docker-entrypoint-initdb.d
@@ -94,7 +95,6 @@ services:
     image: rust
     networks:
       - network-1
-      - ethereum
     volumes:
       - cargo-target:/app/target
       - user-local:/app/local
