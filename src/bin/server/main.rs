@@ -30,14 +30,15 @@ fn send_messages(da: &PostStrageManager, socket: TcpStream) {
     v.send(&socket);
 }
 
-fn accept_message(da: &PostStrageManager, ss: std::slice::Iter<TcpStream>, data: PostData) {
-    da.push(&data.user_id, &data.password, &data.message);
+fn accept_message(da: &PostStrageManager, ss: std::slice::Iter<TcpStream>, data: PostData) -> Result<(), String> {
+    da.push(&data.user_id, &data.password, &data.message)?;
     let v = sender::UpdatedNotification {
         response_type: SendMessageType::Updated.to_string(),
     };
     for s in ss {
         v.send(s);
     }
+    Ok(())
 }
 
 fn delete_message(da: &PostStrageManager, data: DeleteData) {
@@ -74,18 +75,27 @@ fn accept_requests() -> Result<(), Error> {
 
                 thread::spawn(move || loop {
                     let mut rcv_data = String::new();
-                    match reader.read_line(&mut rcv_data) {
+                    if let Err(e) = match reader.read_line(&mut rcv_data) {
                         Ok(_) => match AcceptedMessage::from_str(&rcv_data) {
                             AcceptedMessage::GetMessages => {
-                                send_messages(&da, socket.try_clone().unwrap())
+                                send_messages(&da, socket.try_clone().unwrap());
+                                Ok(())
                             }
                             AcceptedMessage::PostMessage(msg) => {
                                 accept_message(&da, ss.lock().unwrap().iter(), msg)
                             }
-                            AcceptedMessage::DeleteMessage(msg) => delete_message(&da, msg),
-                            AcceptedMessage::None => thread::sleep(Duration::from_millis(10)),
+                            AcceptedMessage::DeleteMessage(msg) => {
+                                delete_message(&da, msg);
+                                Ok(())
+                            },
+                            AcceptedMessage::None => {
+                                thread::sleep(Duration::from_millis(10));
+                                Ok(())
+                            },
                         },
-                        Err(e) => println!("no message: {e:?}"),
+                        Err(e) => Err(format!("no message: {e:?}")),
+                    } {
+                        print!("error handled: {e}")
                     }
                 });
             }

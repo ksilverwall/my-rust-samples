@@ -20,18 +20,20 @@ impl PostStrageManager {
         )
         .unwrap()
     }
-    pub fn push(&self, user_id: &String, password: &String, message: &String) {
-        block_on(
-        sqlx::query_as::<_, NoRecord>(
-            "INSERT INTO main.records (id, user_name, token, posted_at, message) VALUES ($1, $2, $3 CURRENT_TIMESTAMP, $4)"
-        )
-        .bind(Uuid::new_v4().as_bytes())
-        .bind(user_id)
-        .bind(password.as_bytes())
-        .bind(message)
-        .fetch_optional(&self.pool)
-    )
-    .unwrap();
+    pub fn push(&self, user_id: &String, password: &String, message: &String) -> Result<(), String> {
+        match block_on(
+            sqlx::query_as::<_, NoRecord>(
+                "INSERT INTO main.records (id, user_name, token, posted_at, message) VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4)"
+            )
+            .bind(Uuid::new_v4().as_bytes())
+            .bind(user_id)
+            .bind(password.as_bytes())
+            .bind(message)
+            .fetch_optional(&self.pool)
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(format!("failed push to database: {e}")),
+        }
     }
     pub fn delete(&self, user_id: &String, password: &String) {
         block_on(
