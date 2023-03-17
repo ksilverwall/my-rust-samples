@@ -78,6 +78,25 @@ services:
     entrypoint: geth
     command: attach .tmp/node01/geth.ipc
 
+  deploy-contract:
+    profiles: [command]
+    build: ./docker/images/deploy-contract
+    networks:
+      ethereum:
+    volumes:
+      - ./build/contracts/:/contracts/
+      - ./docker/files/node01/:/password
+      - .tmp/file:/output/file
+    environment:
+      ETH_URL: "http://${NODE01_IP:?}:8545"
+    command: [
+      "--account", "6ce0ba981dd9b3bc259bbd868be14f957dbe6dcf",
+      "--password", "/password/password_6ce0ba981dd9b3bc259bbd868be14f957dbe6dcf.txt",
+      "--abi", "/contracts/SocialMedia.abi",
+      "--bin", "/contracts/SocialMedia.bin",
+      "--out", "/output/file/outfile.txt"
+    ]
+
   build:
     profiles: [command]
     image: rust
