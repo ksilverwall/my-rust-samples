@@ -52,16 +52,16 @@ services:
       - ./docker/database/scripts:/docker-entrypoint-initdb.d
     environment:
       - POSTGRES_PASSWORD=mysecretpassword
+
   server:
-    image: rust
+    build:
+      context: .
+      dockerfile: ./docker/images/server/Dockerfile
     networks:
       - network-1
       - server-local
-    volumes:
-      - cargo-target:/app/target
     init: true
-    working_dir: /usr/src/myapp
-    command: "/app/target/debug/server"
+    command: "server"
 
   #
   # Commands
@@ -97,31 +97,19 @@ services:
       "--out", "/output/file/outfile.txt"
     ]
 
-  build:
-    profiles: [command]
-    image: rust
-    volumes:
-      - ./:/usr/src/myapp
-      - cargo-registry:/usr/local/cargo/registry
-      - cargo-target:/app/target
-    working_dir: /usr/src/myapp
-    command: "cargo build"
-    environment:
-      - CARGO_BUILD_TARGET_DIR=/app/target
-
   client:
     profiles: [command]
-    image: rust
+    build:
+      context: .
+      dockerfile: ./docker/images/server/Dockerfile
     networks:
       - network-1
-    volumes:
-      - cargo-target:/app/target
-      - user-local:/app/local
     depends_on:
       - server
     init: true
-    working_dir: /usr/src/myapp
-    command: "/app/target/debug/client"
+    environment:
+      - RUST_BACKTRACE=full
+    command: "client"
 
 volumes:
   cargo-registry:
