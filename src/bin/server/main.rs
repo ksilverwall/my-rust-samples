@@ -22,6 +22,17 @@ use receiver::{AcceptedMessage, DeleteData, PostData};
 use sender::Sendable;
 use storage::PostStrageManager;
 
+struct DatabaseSettings {
+    db_host: String,
+    db_port: String,
+}
+
+impl DatabaseSettings {
+    fn get_url(&self) -> String {
+        return format!("postgresql://app:appPassword@{}:{}/lt", self.db_host, self.db_port);
+    }
+}
+
 fn send_messages(da: &PostStrageManager, socket: TcpStream) {
     let v = sender::RecordsLoadedNotification {
         response_type: SendMessageType::RecordsLoaded.to_string(),
@@ -48,13 +59,13 @@ fn delete_message(da: &PostStrageManager, data: DeleteData) {
     };
 }
 
-fn accept_requests() -> Result<(), Error> {
-    let database_url = "postgresql://app:appPassword@database:5432/lt";
+fn accept_requests(settings: DatabaseSettings) -> Result<(), Error> {
+    let database_url = settings.get_url();
 
     let pool = block_on(
         PgPoolOptions::new()
             .max_connections(10)
-            .connect(database_url),
+            .connect(&database_url),
     )
     .unwrap();
     let sockets: Arc<Mutex<Vec<TcpStream>>> = Arc::new(Mutex::new(vec![]));
@@ -130,7 +141,12 @@ fn main() {
         }
     }
 
-    match accept_requests() {
+    let settings = DatabaseSettings{
+        db_host: env::var("DB_HOST").unwrap_or("localhost".to_string()),
+        db_port: env::var("DB_PORT").unwrap_or("5432".to_string()),      
+    };
+
+    match accept_requests(settings) {
         Ok(_) => println!("Terminated"),
         Err(e) => eprintln!("Error, {}", e),
     }

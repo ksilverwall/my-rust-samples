@@ -47,6 +47,8 @@ services:
     networks:
       - server-local
       - network-1
+    ports:
+      - 5432:5432
     volumes:
       - db-store:/var/lib/postgresql/data
       - ./docker/database/scripts:/docker-entrypoint-initdb.d
@@ -54,6 +56,7 @@ services:
       - POSTGRES_PASSWORD=mysecretpassword
 
   server:
+    profiles: [server]
     build:
       context: .
       dockerfile: ./docker/images/server/Dockerfile
