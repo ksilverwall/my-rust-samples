@@ -3,13 +3,13 @@ use futures::executor::block_on;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-pub struct PostStrageManager {
+pub struct PostStorageManager {
     pool: Pool<Postgres>,
 }
 
-impl PostStrageManager {
-    pub fn new(pool: Pool<Postgres>) -> PostStrageManager {
-        PostStrageManager { pool: pool }
+impl PostStorageManager {
+    pub fn new(pool: Pool<Postgres>) -> PostStorageManager {
+        PostStorageManager { pool: pool }
     }
     pub fn load(&self) -> Vec<PostedRecord> {
         block_on(
