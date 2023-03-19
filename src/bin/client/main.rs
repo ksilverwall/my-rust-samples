@@ -6,11 +6,8 @@ use serde::Serialize;
 use std::{
     io::{stdin, BufRead, BufReader, BufWriter, Error, Write},
     net::TcpStream,
-    thread,
+    thread, env,
 };
-
-const HOST: &str = "server";
-const PORT: i32 = 10080;
 
 mod transaction;
 
@@ -26,10 +23,10 @@ fn accept_message(reader: &mut BufReader<TcpStream>) -> String {
     rcv_data
 }
 
-fn interactive_start() {
+fn interactive_start(host: &str, port: i32) {
     println!("starting...");
 
-    let mut sock = TcpStream::connect(format!("{HOST}:{PORT}")).expect("Failed to connect");
+    let mut sock = TcpStream::connect(format!("{host}:{port}")).expect("Failed to connect");
 
     //
     // Receive Messages
@@ -121,5 +118,8 @@ fn interactive_start() {
 }
 
 fn main() {
-    interactive_start();
+    let host = env::var("HOST").unwrap_or("localhost".to_string());
+    let port = env::var("PORT").unwrap_or("10080".to_string());
+
+    interactive_start(&host, port.parse().unwrap());
 }
