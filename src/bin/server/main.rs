@@ -36,58 +36,60 @@ impl DatabaseSettings {
     }
 }
 
-fn send_messages(da: &PostStorageManager, socket: TcpStream) {
+fn handle_get_messages(da: &PostStorageManager, socket: &TcpStream) -> Result<(), String> {
     let v = sender::RecordsLoadedNotification {
         response_type: SendMessageType::RecordsLoaded.to_string(),
         records: da.load(),
     };
-    v.send(&socket);
-}
-
-fn accept_message(
-    da: &PostStorageManager,
-    ss: std::slice::Iter<TcpStream>,
-    data: PostData,
-) -> Result<(), String> {
-    da.push(&data.user_id, &data.password, &data.message)?;
-    let v = sender::UpdatedNotification {
-        response_type: SendMessageType::Updated.to_string(),
-    };
-    for s in ss {
-        v.send(s);
-    }
+    v.send(&socket.try_clone().unwrap());
     Ok(())
 }
 
-fn delete_message(da: &PostStorageManager, data: DeleteData) {
+fn handle_post_message(
+    da: &PostStorageManager,
+    data: &PostData,
+    on_updated: &dyn Fn(sender::UpdatedNotification) -> (),
+) -> Result<(), String> {
+    da.push(&data.user_id, &data.password, &data.message)?;
+    on_updated(sender::UpdatedNotification {
+        response_type: SendMessageType::Updated.to_string(),
+    });
+    Ok(())
+}
+
+fn handle_delete_message(
+    da: &PostStorageManager,
+    socket: &TcpStream,
+    data: &DeleteData,
+) -> Result<(), String> {
     da.delete(&data.user_id, &data.password);
-    sender::UpdatedNotification {
+    let v = sender::UpdatedNotification {
         response_type: SendMessageType::Updated.to_string(),
     };
+    v.send(&socket.try_clone().unwrap());
+    Ok(())
+}
+
+fn handle_none() -> Result<(), String> {
+    thread::sleep(Duration::from_millis(10));
+    Ok(())
 }
 
 fn handle_message(
     post_storage_manager: &PostStorageManager,
-    sockets: &Arc<Mutex<Vec<TcpStream>>>,
     socket: &TcpStream,
     data: &String,
+    on_updated: &dyn Fn(sender::UpdatedNotification) -> (),
 ) -> Result<(), String> {
     match AcceptedMessage::from_str(data) {
-        AcceptedMessage::GetMessages => {
-            send_messages(&post_storage_manager, socket.try_clone().unwrap());
-            Ok(())
-        }
+        AcceptedMessage::GetMessages => handle_get_messages(post_storage_manager, socket),
         AcceptedMessage::PostMessage(msg) => {
-            accept_message(&post_storage_manager, sockets.lock().unwrap().iter(), msg)
+            handle_post_message(post_storage_manager, &msg, &on_updated)
         }
         AcceptedMessage::DeleteMessage(msg) => {
-            delete_message(&post_storage_manager, msg);
-            Ok(())
+            handle_delete_message(post_storage_manager, socket, &msg)
         }
-        AcceptedMessage::None => {
-            thread::sleep(Duration::from_millis(10));
-            Ok(())
-        }
+        AcceptedMessage::None => handle_none(),
     }
 }
 
@@ -103,7 +105,13 @@ fn handle_clinet(
             break;
         }
 
-        if let Err(e) = handle_message(&post_storage_manager, sockets, &socket, &data) {
+        let on_updated = |v: sender::UpdatedNotification| {
+            for s in sockets.lock().unwrap().iter() {
+                v.send(s);
+            }
+        };
+
+        if let Err(e) = handle_message(&post_storage_manager, &socket, &data, &on_updated) {
             println!("error handled: {}", e);
         }
 
