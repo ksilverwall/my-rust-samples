@@ -1,18 +1,14 @@
-extern crate daemonize;
-
 mod event_handler;
+mod message_sender;
 mod receiver;
 mod sender;
-mod message_sender;
 mod storage;
 
-use daemonize::Daemonize;
 use event_handler::EventHandler;
 use futures::executor::block_on;
 use sqlx::postgres::PgPoolOptions;
 use std::{
     env,
-    fs::File,
     io::{BufRead, BufReader, Error},
     net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
@@ -94,27 +90,6 @@ fn accept_requests(settings: DatabaseSettings) -> Result<(), Error> {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    let is_deamon = args.len() >= 2 && args[1] == "-d";
-
-    if is_deamon {
-        let stdout = File::create("/tmp/daemon.out").unwrap();
-        let stderr = File::create("/tmp/daemon.err").unwrap();
-
-        let daemonize = Daemonize::new()
-            .pid_file("/tmp/test.pid")
-            .working_directory("/tmp")
-            .stdout(stdout)
-            .stderr(stderr)
-            .privileged_action(|| "Executed before drop privileges");
-
-        match daemonize.start() {
-            Ok(_) => println!("Success, daemonized"),
-            Err(e) => eprintln!("Error, {}", e),
-        }
-    }
-
     let settings = DatabaseSettings {
         db_host: env::var("DB_HOST").unwrap_or("localhost".to_string()),
         db_port: env::var("DB_PORT").unwrap_or("5432".to_string()),
