@@ -19,21 +19,21 @@ impl EventHandler {
     pub fn connected(&self, socket: TcpStream) {
         self.sockets.lock().unwrap().push(socket);
     }
-    pub fn handle_get_messages(&self, socket: &TcpStream) -> Result<(), Box<dyn Error>> {
+    pub fn get_messages(&self, socket: &TcpStream) -> Result<(), Box<dyn Error>> {
         let loaded = self.post_storage_manager.load();
         send_loaded(socket, loaded);
         Ok(())
     }
-    pub fn handle_post_message(&self, data: &PostData) -> Result<(), Box<dyn Error>> {
+    pub fn post_message(&self, data: &PostData) -> Result<(), Box<dyn Error>> {
         self.post_storage_manager
             .push(&data.user_id, &data.password, &data.message)?;
-        broadcast_updated(self.sockets.clone());
+        broadcast_updated(self.sockets.lock().unwrap().iter());
         Ok(())
     }
-    pub fn handle_delete_message(&self, data: &DeleteData) -> Result<(), Box<dyn Error>> {
+    pub fn delete_message(&self, data: &DeleteData) -> Result<(), Box<dyn Error>> {
         self.post_storage_manager
             .delete(&data.user_id, &data.password);
-        broadcast_updated(self.sockets.clone());
+        broadcast_updated(self.sockets.lock().unwrap().iter());
         Ok(())
     }
 }

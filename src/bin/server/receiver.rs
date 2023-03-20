@@ -56,9 +56,9 @@ impl AcceptedMessage {
 
     pub fn routing(&self, eh: &EventHandler, socket: &TcpStream) -> Result<(), Box<dyn Error>> {
         match self {
-            AcceptedMessage::GetMessages => eh.handle_get_messages(socket),
-            AcceptedMessage::PostMessage(msg) => eh.handle_post_message(&msg),
-            AcceptedMessage::DeleteMessage(msg) => eh.handle_delete_message(&msg),
+            AcceptedMessage::GetMessages => eh.get_messages(socket),
+            AcceptedMessage::PostMessage(msg) => eh.post_message(&msg),
+            AcceptedMessage::DeleteMessage(msg) => eh.delete_message(&msg),
         }
     }
 }
