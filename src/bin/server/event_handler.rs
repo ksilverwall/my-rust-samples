@@ -1,12 +1,13 @@
 use std::{
+    error::Error,
     net::TcpStream,
     sync::{Arc, Mutex},
 };
 
 use crate::{
+    message_sender::{broadcast_updated, send_loaded},
     receiver::{DeleteData, PostData},
     storage::PostStorageManager,
-    message_sender::{send_loaded, broadcast_updated},
 };
 
 pub struct EventHandler {
@@ -18,18 +19,18 @@ impl EventHandler {
     pub fn connected(&self, socket: TcpStream) {
         self.sockets.lock().unwrap().push(socket);
     }
-    pub fn handle_get_messages(&self, socket: &TcpStream) -> Result<(), String> {
+    pub fn handle_get_messages(&self, socket: &TcpStream) -> Result<(), Box<dyn Error>> {
         let loaded = self.post_storage_manager.load();
         send_loaded(socket, loaded);
         Ok(())
     }
-    pub fn handle_post_message(&self, data: &PostData) -> Result<(), String> {
+    pub fn handle_post_message(&self, data: &PostData) -> Result<(), Box<dyn Error>> {
         self.post_storage_manager
             .push(&data.user_id, &data.password, &data.message)?;
         broadcast_updated(self.sockets.clone());
         Ok(())
     }
-    pub fn handle_delete_message(&self, data: &DeleteData) -> Result<(), String> {
+    pub fn handle_delete_message(&self, data: &DeleteData) -> Result<(), Box<dyn Error>> {
         self.post_storage_manager
             .delete(&data.user_id, &data.password);
         broadcast_updated(self.sockets.clone());

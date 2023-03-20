@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
+use std::error::Error;
+use std::net::TcpStream;
 
 use local_talk::interface::{AcceptMessageType, DeleteMessageDto, PostMessageDto};
+
+use crate::event_handler::EventHandler;
 
 #[derive(Serialize, Deserialize)]
 pub struct PostData {
@@ -18,48 +22,43 @@ pub enum AcceptedMessage {
     PostMessage(PostData),
     GetMessages,
     DeleteMessage(DeleteData),
-    None,
 }
 
 impl AcceptedMessage {
-    pub fn from_str(data: &String) -> AcceptedMessage {
-        if data.len() == 0 {
-            return AcceptedMessage::None;
+    pub fn from_str(data: &str) -> Result<Self, Box<dyn Error>> {
+        #[derive(Deserialize)]
+        struct _H {
+            message_type: String,
         }
 
-        println!("handled message: {data:?}");
-        let value = serde_json::from_str::<_Received>(data).unwrap();
+        let message_type = serde_json::from_str::<_H>(data)?.message_type;
 
-        match AcceptMessageType::from_str(&&value.message_type.to_string()) {
+        let accepted = match AcceptMessageType::from_str(&message_type) {
             AcceptMessageType::GetMessages => AcceptedMessage::GetMessages,
-            AcceptMessageType::SendMessage => match serde_json::from_str::<PostMessageDto>(data) {
-                Ok(rec) => AcceptedMessage::PostMessage(PostData {
+            AcceptMessageType::SendMessage => {
+                let rec = serde_json::from_str::<PostMessageDto>(data)?;
+                AcceptedMessage::PostMessage(PostData {
                     user_id: rec.user_id,
                     password: rec.password,
                     message: rec.message,
-                }),
-                Err(err) => {
-                    println!("Failed to parse send message");
-                    panic!("{err}");
-                }
-            },
-            AcceptMessageType::DeleteMessage => {
-                match serde_json::from_str::<DeleteMessageDto>(data) {
-                    Ok(rec) => AcceptedMessage::DeleteMessage(DeleteData {
-                        user_id: rec.user_id,
-                        password: rec.password,
-                    }),
-                    Err(err) => {
-                        println!("Failed to parse delete message");
-                        panic!("{err}");
-                    }
-                }
+                })
             }
+            AcceptMessageType::DeleteMessage => {
+                let rec = serde_json::from_str::<DeleteMessageDto>(data)?;
+                AcceptedMessage::DeleteMessage(DeleteData {
+                    user_id: rec.user_id,
+                    password: rec.password,
+                })
+            }
+        };
+        Ok(accepted)
+    }
+
+    pub fn routing(&self, eh: &EventHandler, socket: &TcpStream) -> Result<(), Box<dyn Error>> {
+        match self {
+            AcceptedMessage::GetMessages => eh.handle_get_messages(socket),
+            AcceptedMessage::PostMessage(msg) => eh.handle_post_message(&msg),
+            AcceptedMessage::DeleteMessage(msg) => eh.handle_delete_message(&msg),
         }
     }
-}
-
-#[derive(Serialize, Deserialize)]
-struct _Received {
-    message_type: String,
 }

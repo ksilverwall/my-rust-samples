@@ -4,18 +4,19 @@ mod receiver;
 mod sender;
 mod storage;
 
-use event_handler::EventHandler;
 use futures::executor::block_on;
 use sqlx::postgres::PgPoolOptions;
 use std::{
     env,
-    io::{BufRead, BufReader, Error},
+    error::Error,
+    io::{BufRead, BufReader},
     net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
 
+use event_handler::EventHandler;
 use receiver::AcceptedMessage;
 use storage::PostStorageManager;
 
@@ -33,30 +34,20 @@ impl DatabaseSettings {
     }
 }
 
-fn handle_message(mh: &EventHandler, socket: &TcpStream, data: &String) -> Result<(), String> {
-    match AcceptedMessage::from_str(data) {
-        AcceptedMessage::GetMessages => mh.handle_get_messages(socket),
-        AcceptedMessage::PostMessage(msg) => mh.handle_post_message(&msg),
-        AcceptedMessage::DeleteMessage(msg) => mh.handle_delete_message(&msg),
-        AcceptedMessage::None => {
-            thread::sleep(Duration::from_millis(10));
-            Ok(())
-        }
-    }
-}
+fn handle_clinet(eh: &EventHandler, socket: TcpStream) -> Result<(), Box<dyn Error>> {
+    eh.connected(socket.try_clone()?);
 
-fn handle_clinet(eh: &EventHandler, socket: TcpStream) -> Result<(), String> {
-    eh.connected(socket.try_clone().unwrap());
-
-    let mut reader = BufReader::new(socket.try_clone().unwrap());
+    let mut reader = BufReader::new(socket.try_clone()?);
     let mut data = String::new();
     while let Ok(len) = reader.read_line(&mut data) {
         if len == 0 {
-            break;
+            thread::sleep(Duration::from_millis(10));
+            continue;
         }
 
-        if let Err(e) = handle_message(&eh, &socket, &data) {
-            println!("error handled: {}", e);
+        println!("handled message: {data:?}");
+        if let Err(e) = AcceptedMessage::from_str(&data)?.routing(&eh, &socket) {
+            println!("error handled: {e:?}");
         }
 
         data.clear();
@@ -64,17 +55,14 @@ fn handle_clinet(eh: &EventHandler, socket: TcpStream) -> Result<(), String> {
     Ok(())
 }
 
-fn accept_requests(settings: DatabaseSettings) -> Result<(), Error> {
+fn accept_requests(settings: DatabaseSettings) -> Result<(), Box<dyn Error>> {
     let database_url = settings.get_url();
-    let pool = block_on(
-        PgPoolOptions::new()
-            .max_connections(10)
-            .connect(&database_url),
-    )
-    .unwrap();
-    let sockets: Arc<Mutex<Vec<TcpStream>>> = Arc::new(Mutex::new(vec![]));
-    let listener = TcpListener::bind("0.0.0.0:10080")?;
+    let pool_option = PgPoolOptions::new().max_connections(10);
 
+    let pool = block_on(pool_option.connect(&database_url))?;
+    let sockets: Arc<Mutex<Vec<TcpStream>>> = Arc::new(Mutex::new(vec![]));
+
+    let listener = TcpListener::bind("0.0.0.0:10080")?;
     loop {
         let (socket, addr) = listener.accept()?;
         println!("new client: {addr:?}");
@@ -85,18 +73,19 @@ fn accept_requests(settings: DatabaseSettings) -> Result<(), Error> {
             sockets: Arc::clone(&sockets),
         };
 
-        thread::spawn(move || handle_clinet(&mh, socket));
+        // FIXME: handle error
+        thread::spawn(move || handle_clinet(&mh, socket).unwrap());
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let settings = DatabaseSettings {
         db_host: env::var("DB_HOST").unwrap_or("localhost".to_string()),
         db_port: env::var("DB_PORT").unwrap_or("5432".to_string()),
     };
 
-    match accept_requests(settings) {
-        Ok(_) => println!("Terminated"),
-        Err(e) => eprintln!("Error, {}", e),
-    }
+    accept_requests(settings)?;
+
+    println!("Terminated");
+    Ok(())
 }
