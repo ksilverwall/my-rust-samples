@@ -1,10 +1,13 @@
 extern crate daemonize;
 
+mod event_handler;
 mod receiver;
 mod sender;
+mod message_sender;
 mod storage;
 
 use daemonize::Daemonize;
+use event_handler::EventHandler;
 use futures::executor::block_on;
 use sqlx::postgres::PgPoolOptions;
 use std::{
@@ -17,9 +20,7 @@ use std::{
     time::Duration,
 };
 
-use local_talk::interface::SendMessageType;
-use receiver::{AcceptedMessage, DeleteData, PostData};
-use sender::Sendable;
+use receiver::AcceptedMessage;
 use storage::PostStorageManager;
 
 struct DatabaseSettings {
@@ -36,68 +37,21 @@ impl DatabaseSettings {
     }
 }
 
-fn handle_get_messages(da: &PostStorageManager, socket: &TcpStream) -> Result<(), String> {
-    let v = sender::RecordsLoadedNotification {
-        response_type: SendMessageType::RecordsLoaded.to_string(),
-        records: da.load(),
-    };
-    v.send(&socket.try_clone().unwrap());
-    Ok(())
-}
-
-fn handle_post_message(
-    da: &PostStorageManager,
-    data: &PostData,
-    on_updated: &dyn Fn(sender::UpdatedNotification) -> (),
-) -> Result<(), String> {
-    da.push(&data.user_id, &data.password, &data.message)?;
-    on_updated(sender::UpdatedNotification {
-        response_type: SendMessageType::Updated.to_string(),
-    });
-    Ok(())
-}
-
-fn handle_delete_message(
-    da: &PostStorageManager,
-    socket: &TcpStream,
-    data: &DeleteData,
-) -> Result<(), String> {
-    da.delete(&data.user_id, &data.password);
-    let v = sender::UpdatedNotification {
-        response_type: SendMessageType::Updated.to_string(),
-    };
-    v.send(&socket.try_clone().unwrap());
-    Ok(())
-}
-
-fn handle_none() -> Result<(), String> {
-    thread::sleep(Duration::from_millis(10));
-    Ok(())
-}
-
-fn handle_message(
-    post_storage_manager: &PostStorageManager,
-    socket: &TcpStream,
-    data: &String,
-    on_updated: &dyn Fn(sender::UpdatedNotification) -> (),
-) -> Result<(), String> {
+fn handle_message(mh: &EventHandler, socket: &TcpStream, data: &String) -> Result<(), String> {
     match AcceptedMessage::from_str(data) {
-        AcceptedMessage::GetMessages => handle_get_messages(post_storage_manager, socket),
-        AcceptedMessage::PostMessage(msg) => {
-            handle_post_message(post_storage_manager, &msg, &on_updated)
+        AcceptedMessage::GetMessages => mh.handle_get_messages(socket),
+        AcceptedMessage::PostMessage(msg) => mh.handle_post_message(&msg),
+        AcceptedMessage::DeleteMessage(msg) => mh.handle_delete_message(&msg),
+        AcceptedMessage::None => {
+            thread::sleep(Duration::from_millis(10));
+            Ok(())
         }
-        AcceptedMessage::DeleteMessage(msg) => {
-            handle_delete_message(post_storage_manager, socket, &msg)
-        }
-        AcceptedMessage::None => handle_none(),
     }
 }
 
-fn handle_clinet(
-    post_storage_manager: &PostStorageManager,
-    sockets: &Arc<Mutex<Vec<TcpStream>>>,
-    socket: TcpStream,
-) {
+fn handle_clinet(eh: &EventHandler, socket: TcpStream) -> Result<(), String> {
+    eh.connected(socket.try_clone().unwrap());
+
     let mut reader = BufReader::new(socket.try_clone().unwrap());
     let mut data = String::new();
     while let Ok(len) = reader.read_line(&mut data) {
@@ -105,18 +59,13 @@ fn handle_clinet(
             break;
         }
 
-        let on_updated = |v: sender::UpdatedNotification| {
-            for s in sockets.lock().unwrap().iter() {
-                v.send(s);
-            }
-        };
-
-        if let Err(e) = handle_message(&post_storage_manager, &socket, &data, &on_updated) {
+        if let Err(e) = handle_message(&eh, &socket, &data) {
             println!("error handled: {}", e);
         }
 
         data.clear();
     }
+    Ok(())
 }
 
 fn accept_requests(settings: DatabaseSettings) -> Result<(), Error> {
@@ -134,21 +83,13 @@ fn accept_requests(settings: DatabaseSettings) -> Result<(), Error> {
         let (socket, addr) = listener.accept()?;
         println!("new client: {addr:?}");
 
-        let sockets_clone = Arc::clone(&sockets);
-        let post_storage_manager = PostStorageManager::new(pool.clone());
+        // FIXME: Move to out of loop
+        let mh = EventHandler {
+            post_storage_manager: PostStorageManager::new(pool.clone()),
+            sockets: Arc::clone(&sockets),
+        };
 
-        Arc::clone(&sockets)
-            .lock()
-            .unwrap()
-            .push(socket.try_clone()?);
-
-        thread::spawn(move || {
-            handle_clinet(
-                &post_storage_manager,
-                &sockets_clone,
-                socket.try_clone().unwrap(),
-            )
-        });
+        thread::spawn(move || handle_clinet(&mh, socket));
     }
 }
 
