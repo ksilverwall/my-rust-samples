@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fmt::format;
 use std::ops::Add;
 use web3::contract::Contract;
 use web3::contract::Options;
@@ -13,12 +14,15 @@ pub struct EthereumManager {
 }
 
 impl EthereumManager {
-    pub fn create(node_url: &str, abi_json: &str, contract_address: &str) -> Result<Self, Box<dyn Error>> {
-        let contract = Contract::from_json(
-            Web3::new(Http::new(node_url)?).eth(),
-            contract_address.parse::<Address>()?,
-            &serde_json::from_str::<Vec<u8>>(&abi_json)?,
-        )?;
+    pub fn create(
+        node_url: &str,
+        abi_json: &str,
+        contract_address: &str,
+    ) -> Result<Self, Box<dyn Error>> {
+        let eth = Web3::new(Http::new(node_url)?).eth();
+        let address = contract_address.parse::<Address>()?;
+
+        let contract = Contract::from_json(eth, address, &abi_json.as_bytes())?;
 
         Ok(Self { contract: contract })
     }

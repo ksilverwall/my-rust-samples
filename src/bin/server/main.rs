@@ -3,12 +3,12 @@ mod event_handler;
 mod message_sender;
 mod receiver;
 mod sender;
+mod settings;
 mod storage;
 
 use futures::executor::block_on;
 use sqlx::postgres::PgPoolOptions;
 use std::{
-    env,
     error::Error,
     fs,
     io::{BufRead, BufReader},
@@ -21,27 +21,8 @@ use std::{
 use ethereum::EthereumManager;
 use event_handler::EventHandler;
 use receiver::AcceptedMessage;
+use settings::Settings;
 use storage::PostStorageManager;
-
-struct DatabaseSettings {
-    db_host: String,
-    db_port: String,
-}
-
-struct EthereumSettings {
-    node_url: String,
-    abi_file: String,
-    contract_address: String,
-}
-
-impl DatabaseSettings {
-    fn get_url(&self) -> String {
-        return format!(
-            "postgresql://app:appPassword@{}:{}/lt",
-            self.db_host, self.db_port
-        );
-    }
-}
 
 fn handle_clinet(eh: &EventHandler, socket: TcpStream) -> Result<(), Box<dyn Error>> {
     eh.connected(socket.try_clone()?);
@@ -64,11 +45,8 @@ fn handle_clinet(eh: &EventHandler, socket: TcpStream) -> Result<(), Box<dyn Err
     Ok(())
 }
 
-fn accept_requests(
-    settings: &DatabaseSettings,
-    eth: EthereumSettings,
-) -> Result<(), Box<dyn Error>> {
-    let database_url = settings.get_url();
+fn accept_requests(settings: &Settings) -> Result<(), Box<dyn Error>> {
+    let database_url = settings.database.get_url();
     let pool_option = PgPoolOptions::new().max_connections(10);
 
     let pool = block_on(pool_option.connect(&database_url))?;
@@ -76,10 +54,10 @@ fn accept_requests(
     let mh = EventHandler {
         post_storage_manager: PostStorageManager::new(pool),
         ethereum_manager: EthereumManager::create(
-            &eth.node_url,
-            &fs::read_to_string(&eth.abi_file)?,
-            &eth.contract_address,
-        )?,
+            &settings.ethereum.node_url,
+            &fs::read_to_string(&settings.ethereum.abi_file)?,
+            &settings.ethereum.contract_address,
+        ).map_err(|e| format!("create ethereum manager: {e}"))?,
         sockets: Arc::new(Mutex::new(vec![])),
     };
 
@@ -96,18 +74,11 @@ fn accept_requests(
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let database = DatabaseSettings {
-        db_host: env::var("DB_HOST").unwrap_or("localhost".to_string()),
-        db_port: env::var("DB_PORT").unwrap_or("5432".to_string()),
-    };
+    let settings = Settings::load()?;
 
-    let ethereum = EthereumSettings {
-        node_url: env::var("NODE_URL").unwrap_or("http://localhost:8545".to_string()),
-        abi_file: env::var("ABI_FILE").unwrap(),
-        contract_address: env::var("CONTRACT_ADDRESS").unwrap(),
+    if let Err(e) = accept_requests(&settings) {
+        eprintln!("{e:?}");
     };
-
-    accept_requests(&database, ethereum)?;
 
     println!("Terminated");
     Ok(())
