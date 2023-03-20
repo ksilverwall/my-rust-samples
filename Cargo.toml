@@ -10,6 +10,7 @@ name = "server"
 name = "client"
 
 [dependencies]
+web3 = "0.16.0"
 futures = "0.3.26"
 sqlx = { version = "0.6", features = ["chrono", "runtime-async-std-native-tls", "postgres"] }
 async-std = { version = "1", features = ["attributes"] }

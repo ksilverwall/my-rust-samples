@@ -1,3 +1,4 @@
+mod ethereum;
 mod event_handler;
 mod message_sender;
 mod receiver;
@@ -9,6 +10,7 @@ use sqlx::postgres::PgPoolOptions;
 use std::{
     env,
     error::Error,
+    fs,
     io::{BufRead, BufReader},
     net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
@@ -16,6 +18,7 @@ use std::{
     time::Duration,
 };
 
+use ethereum::EthereumManager;
 use event_handler::EventHandler;
 use receiver::AcceptedMessage;
 use storage::PostStorageManager;
@@ -23,6 +26,12 @@ use storage::PostStorageManager;
 struct DatabaseSettings {
     db_host: String,
     db_port: String,
+}
+
+struct EthereumSettings {
+    node_url: String,
+    abi_file: String,
+    contract_address: String,
 }
 
 impl DatabaseSettings {
@@ -55,36 +64,50 @@ fn handle_clinet(eh: &EventHandler, socket: TcpStream) -> Result<(), Box<dyn Err
     Ok(())
 }
 
-fn accept_requests(settings: DatabaseSettings) -> Result<(), Box<dyn Error>> {
+fn accept_requests(
+    settings: &DatabaseSettings,
+    eth: EthereumSettings,
+) -> Result<(), Box<dyn Error>> {
     let database_url = settings.get_url();
     let pool_option = PgPoolOptions::new().max_connections(10);
 
     let pool = block_on(pool_option.connect(&database_url))?;
-    let sockets: Arc<Mutex<Vec<TcpStream>>> = Arc::new(Mutex::new(vec![]));
+
+    let mh = EventHandler {
+        post_storage_manager: PostStorageManager::new(pool),
+        ethereum_manager: EthereumManager::create(
+            &eth.node_url,
+            &fs::read_to_string(&eth.abi_file)?,
+            &eth.contract_address,
+        )?,
+        sockets: Arc::new(Mutex::new(vec![])),
+    };
 
     let listener = TcpListener::bind("0.0.0.0:10080")?;
     loop {
         let (socket, addr) = listener.accept()?;
         println!("new client: {addr:?}");
 
-        // FIXME: Move to out of loop
-        let mh = EventHandler {
-            post_storage_manager: PostStorageManager::new(pool.clone()),
-            sockets: Arc::clone(&sockets),
-        };
+        let mh_th = mh.clone();
 
         // FIXME: handle error
-        thread::spawn(move || handle_clinet(&mh, socket).unwrap());
+        thread::spawn(move || handle_clinet(&mh_th, socket).unwrap());
     }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let settings = DatabaseSettings {
+    let database = DatabaseSettings {
         db_host: env::var("DB_HOST").unwrap_or("localhost".to_string()),
         db_port: env::var("DB_PORT").unwrap_or("5432".to_string()),
     };
 
-    accept_requests(settings)?;
+    let ethereum = EthereumSettings {
+        node_url: env::var("NODE_URL").unwrap_or("http://localhost:8545".to_string()),
+        abi_file: env::var("ABI_FILE").unwrap(),
+        contract_address: env::var("CONTRACT_ADDRESS").unwrap(),
+    };
+
+    accept_requests(&database, ethereum)?;
 
     println!("Terminated");
     Ok(())

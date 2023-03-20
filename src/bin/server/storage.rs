@@ -8,9 +8,13 @@ pub struct PostStorageManager {
 }
 
 impl PostStorageManager {
-    pub fn new(pool: Pool<Postgres>) -> PostStorageManager {
-        PostStorageManager { pool: pool }
+    pub fn new(pool: Pool<Postgres>) -> Self {
+        Self { pool: pool }
     }
+    pub fn clone(&self) -> Self {
+        return Self::new(self.pool.clone());
+    }
+
     pub fn load(&self) -> Vec<PostedRecord> {
         block_on(
             sqlx::query_as::<_, PostedRecord>(
@@ -20,7 +24,12 @@ impl PostStorageManager {
         )
         .unwrap()
     }
-    pub fn push(&self, user_id: &String, password: &String, message: &String) -> Result<(), String> {
+    pub fn push(
+        &self,
+        user_id: &String,
+        password: &String,
+        message: &String,
+    ) -> Result<(), String> {
         match block_on(
             sqlx::query_as::<_, NoRecord>(
                 "INSERT INTO main.records (id, user_name, token, posted_at, message) VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4)"

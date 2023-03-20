@@ -1,0 +1,57 @@
+use std::error::Error;
+use std::ops::Add;
+use web3::contract::Contract;
+use web3::contract::Options;
+use web3::ethabi::Address;
+use web3::transports::Http;
+use web3::types::H256;
+use web3::types::U256;
+use web3::Web3;
+
+pub struct EthereumManager {
+    contract: Contract<Http>,
+}
+
+impl EthereumManager {
+    pub fn create(node_url: &str, abi_json: &str, contract_address: &str) -> Result<Self, Box<dyn Error>> {
+        let contract = Contract::from_json(
+            Web3::new(Http::new(node_url)?).eth(),
+            contract_address.parse::<Address>()?,
+            &serde_json::from_str::<Vec<u8>>(&abi_json)?,
+        )?;
+
+        Ok(Self { contract: contract })
+    }
+
+    pub fn clone(&self) -> Self {
+        Self {
+            contract: self.contract.clone(),
+        }
+    }
+
+    pub async fn get_messages(&self, from_address: Address) -> Result<(), Box<dyn Error>> {
+        let value: Vec<u8> = self
+            .contract
+            .query("getPosts", (from_address,), None, Options::default(), None)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn post_message(
+        &self,
+        from_address: Address,
+        contents: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        let params = (H256::from_slice(contents.as_bytes()),);
+
+        let mut opt = Options::default();
+        opt.gas = Some(U256::from(300000));
+
+        self.contract
+            .call("createPost", params, from_address, opt)
+            .await?;
+
+        Ok(())
+    }
+}

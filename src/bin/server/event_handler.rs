@@ -8,14 +8,23 @@ use crate::{
     message_sender::{broadcast_updated, send_loaded},
     receiver::{DeleteData, PostData},
     storage::PostStorageManager,
+    ethereum::EthereumManager,
 };
 
 pub struct EventHandler {
     pub post_storage_manager: PostStorageManager,
+    pub ethereum_manager: EthereumManager,
     pub sockets: Arc<Mutex<Vec<TcpStream>>>,
 }
 
 impl EventHandler {
+    pub fn clone(&self) -> Self {
+        return Self{
+            post_storage_manager: self.post_storage_manager.clone(),
+            ethereum_manager: self.ethereum_manager.clone(),
+            sockets: Arc::clone(&self.sockets),
+        }
+    }
     pub fn connected(&self, socket: TcpStream) {
         self.sockets.lock().unwrap().push(socket);
     }
