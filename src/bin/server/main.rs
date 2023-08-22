@@ -80,13 +80,30 @@ fn accept_requests(settings: &Settings) -> Result<(), Box<dyn Error>> {
     }
 }
 
+fn init_logger() {
+    simplelog::CombinedLogger::init(vec![
+        simplelog::TermLogger::new(
+            simplelog::LevelFilter::Info,
+            simplelog::Config::default(),
+            simplelog::TerminalMode::Mixed,
+            simplelog::ColorChoice::Auto,
+        ),
+    ])
+    .unwrap();
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
+    init_logger();
+
     let settings = Settings::load()?;
+
+    log::info!("Start");
 
     if let Err(e) = accept_requests(&settings) {
         eprintln!("service aborted: {e:?}");
     };
 
-    println!("Terminated");
+    log::info!("Terminated");
+
     Ok(())
 }
