@@ -56,9 +56,7 @@ services:
       - POSTGRES_PASSWORD=mysecretpassword
 
   server:
-    build:
-      context: .
-      dockerfile: ./docker/images/server/Dockerfile
+    image: local-talk
     ports:
       - 10080:10080
     networks:
@@ -103,9 +101,7 @@ services:
 
   client:
     profiles: [command]
-    build:
-      context: .
-      dockerfile: ./docker/images/server/Dockerfile
+    image: local-talk
     networks:
       - network-1
     depends_on:
