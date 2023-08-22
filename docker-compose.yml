@@ -56,7 +56,6 @@ services:
       - POSTGRES_PASSWORD=mysecretpassword
 
   server:
-    profiles: [server]
     build:
       context: .
       dockerfile: ./docker/images/server/Dockerfile

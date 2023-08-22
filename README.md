@@ -1,20 +1,14 @@
 New Rust Project
 ---
 
-## Initialize
-
-```
-docker compose run --rm init-eth
-```
-
-## Start Services
-
-```
-docker compose up -d
-```
-
 ## How to exec
 
 ```
-cargo run
+cargo run --bin client
+```
+
+## Run in Container
+
+```
+docker compose run --rm client
 ```
