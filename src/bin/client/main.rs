@@ -4,9 +4,10 @@ extern crate rand;
 use local_talk::interface::{AcceptMessageType, DeleteMessageDto, GetMessageDto, PostMessageDto};
 use serde::Serialize;
 use std::{
+    env,
     io::{stdin, BufRead, BufReader, BufWriter, Error, Write},
     net::TcpStream,
-    thread, env,
+    thread,
 };
 
 mod transaction;
@@ -23,10 +24,11 @@ fn accept_message(reader: &mut BufReader<TcpStream>) -> String {
     rcv_data
 }
 
-fn interactive_start(host: &str, port: i32) {
+fn interactive_start(host: &str, port: i32) -> anyhow::Result<()> {
     println!("starting...");
 
-    let mut sock = TcpStream::connect(format!("{host}:{port}")).expect("Failed to connect");
+    let mut sock = TcpStream::connect(format!("{host}:{port}"))
+        .map_err(|_| anyhow::anyhow!("failed to connect server '{host}:{port}'"))?;
 
     //
     // Receive Messages
@@ -121,5 +123,8 @@ fn main() {
     let host = env::var("HOST").unwrap_or("localhost".to_string());
     let port = env::var("PORT").unwrap_or("10080".to_string());
 
-    interactive_start(&host, port.parse().unwrap());
+    if let Err(err) = interactive_start(&host, port.parse().unwrap()) {
+        eprintln!("ERROR: terminate with error: {}", err);
+        std::process::exit(-1);
+    }
 }

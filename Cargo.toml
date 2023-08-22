@@ -10,6 +10,7 @@ name = "server"
 name = "client"
 
 [dependencies]
+anyhow = "1.0"
 web3 = "0.16.0"
 futures = "0.3.26"
 sqlx = { version = "0.6", features = ["chrono", "runtime-async-std-native-tls", "postgres"] }
