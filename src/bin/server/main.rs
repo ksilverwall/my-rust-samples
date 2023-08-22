@@ -49,7 +49,13 @@ fn accept_requests(settings: &Settings) -> Result<(), Box<dyn Error>> {
     let database_url = settings.database.get_url();
     let pool_option = PgPoolOptions::new().max_connections(10);
 
-    let pool = block_on(pool_option.connect(&database_url))?;
+    let pool = block_on(pool_option.connect(&database_url)).map_err(|_| {
+        anyhow::anyhow!(
+            "failed to connect to database '{}:{}'",
+            settings.database.db_host,
+            settings.database.db_port
+        )
+    })?;
 
     let mh = EventHandler {
         post_storage_manager: PostStorageManager::new(pool),
@@ -57,7 +63,8 @@ fn accept_requests(settings: &Settings) -> Result<(), Box<dyn Error>> {
             &settings.ethereum.node_url,
             &fs::read_to_string(&settings.ethereum.abi_file)?,
             &settings.ethereum.contract_address,
-        ).map_err(|e| format!("create ethereum manager: {e}"))?,
+        )
+        .map_err(|e| format!("create ethereum manager: {e}"))?,
         sockets: Arc::new(Mutex::new(vec![])),
     };
 
@@ -77,7 +84,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let settings = Settings::load()?;
 
     if let Err(e) = accept_requests(&settings) {
-        eprintln!("{e:?}");
+        eprintln!("service aborted: {e:?}");
     };
 
     println!("Terminated");

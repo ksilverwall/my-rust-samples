@@ -1,6 +1,4 @@
 use std::error::Error;
-use std::fmt::format;
-use std::ops::Add;
 use web3::contract::Contract;
 use web3::contract::Options;
 use web3::ethabi::Address;
@@ -33,8 +31,9 @@ impl EthereumManager {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn get_messages(&self, from_address: Address) -> Result<(), Box<dyn Error>> {
-        let value: Vec<u8> = self
+        let _: Vec<u8> = self
             .contract
             .query("getPosts", (from_address,), None, Options::default(), None)
             .await?;
@@ -42,6 +41,7 @@ impl EthereumManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn post_message(
         &self,
         from_address: Address,
