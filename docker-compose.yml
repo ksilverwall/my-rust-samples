@@ -57,11 +57,19 @@ services:
 
   server:
     image: local-talk
+    depends_on:
+      - database
     ports:
       - 10080:10080
     networks:
       - network-1
       - server-local
+    volumes:
+      - ./build/contracts:/contracts
+    environment:
+      - ABI_FILE=/contracts/SocialMedia.abi
+      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS}
+      - DB_HOST=database
     init: true
     command: "server"
 
