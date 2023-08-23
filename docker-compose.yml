@@ -121,6 +121,21 @@ services:
       - PORT=10080
     command: "client"
 
+  e2e-test:
+    image: rust
+    depends_on:
+      - server
+    networks:
+      - network-1
+    volumes:
+      - ./tests:/app
+    environment:
+      - RUST_BACKTRACE=full
+      - HOST=server
+      - PORT=10080
+    working_dir: /app
+    command: cargo test
+
 volumes:
   cargo-registry:
   cargo-target:
