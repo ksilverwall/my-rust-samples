@@ -15,7 +15,7 @@ $(BUILD_DIR)/%.bin: $(CONTRACTS_DIR)/%.sol
 build: $(BUILD_DIR)/SocialMedia.bin
 
 build-image: $(call find src -name "*.rs")
-	docker build . -f ./docker/images/server/Dockerfile -t local-talk
+	docker build . -f ./docker/images/server/Dockerfile --build-arg SRC_DIR=./server -t local-talk
 
 clean:
 	rm -rf $(BUILD_DIR)

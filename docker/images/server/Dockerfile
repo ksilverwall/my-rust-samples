@@ -2,13 +2,15 @@ FROM rust:latest as builder
 
 WORKDIR /usr/src/myapp
 
-COPY Cargo.toml Cargo.lock ./
+ARG SRC_DIR
+
+COPY ${SRC_DIR}/Cargo.toml ${SRC_DIR}/Cargo.lock ./
 RUN mkdir -p src/bin
 RUN echo "fn main() {}" > ./src/bin/server.rs
 RUN echo "fn main() {}" > ./src/bin/client.rs
 RUN cargo build --release
 RUN rm -r ./src
-COPY src ./src/
+COPY server/src ./src/
 
 RUN cargo build --release
 
