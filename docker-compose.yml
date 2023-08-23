@@ -129,6 +129,7 @@ services:
       - network-1
     volumes:
       - ./tests:/app
+      - e2e-test-bin:/app/target
     environment:
       - RUST_BACKTRACE=full
       - HOST=server
@@ -137,8 +138,7 @@ services:
     command: cargo test
 
 volumes:
-  cargo-registry:
-  cargo-target:
+  e2e-test-bin:
   db-store:
   user-local:
 
